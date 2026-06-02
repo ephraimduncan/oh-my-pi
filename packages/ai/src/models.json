@@ -3095,8 +3095,9 @@
 			"maxTokens": 128000,
 			"thinking": {
 				"mode": "anthropic-adaptive",
-				"minLevel": "minimal",
-				"maxLevel": "xhigh"
+				"minLevel": "low",
+				"maxLevel": "max",
+				"defaultLevel": "xhigh"
 			}
 		},
 		"claude-opus-4-8": {
@@ -3120,8 +3121,9 @@
 			"maxTokens": 128000,
 			"thinking": {
 				"mode": "anthropic-adaptive",
-				"minLevel": "minimal",
-				"maxLevel": "xhigh"
+				"minLevel": "low",
+				"maxLevel": "max",
+				"defaultLevel": "xhigh"
 			}
 		},
 		"claude-sonnet-4-0": {
@@ -3638,8 +3640,9 @@
 			"maxTokens": 128000,
 			"thinking": {
 				"mode": "anthropic-adaptive",
-				"minLevel": "minimal",
-				"maxLevel": "xhigh"
+				"minLevel": "low",
+				"maxLevel": "max",
+				"defaultLevel": "xhigh"
 			}
 		},
 		"anthropic/claude-opus-4-8": {
@@ -3663,8 +3666,9 @@
 			"maxTokens": 128000,
 			"thinking": {
 				"mode": "anthropic-adaptive",
-				"minLevel": "minimal",
-				"maxLevel": "xhigh"
+				"minLevel": "low",
+				"maxLevel": "max",
+				"defaultLevel": "xhigh"
 			}
 		},
 		"anthropic/claude-sonnet-4": {
@@ -5637,8 +5641,9 @@
 			},
 			"thinking": {
 				"mode": "anthropic-adaptive",
-				"minLevel": "minimal",
-				"maxLevel": "xhigh"
+				"minLevel": "low",
+				"maxLevel": "max",
+				"defaultLevel": "xhigh"
 			}
 		},
 		"claude-opus-4.8": {
@@ -5665,8 +5670,9 @@
 			},
 			"thinking": {
 				"mode": "anthropic-adaptive",
-				"minLevel": "minimal",
-				"maxLevel": "xhigh"
+				"minLevel": "low",
+				"maxLevel": "max",
+				"defaultLevel": "xhigh"
 			}
 		},
 		"claude-sonnet-4": {
@@ -8294,8 +8300,9 @@
 			"maxTokens": 128000,
 			"thinking": {
 				"mode": "anthropic-adaptive",
-				"minLevel": "minimal",
-				"maxLevel": "xhigh"
+				"minLevel": "low",
+				"maxLevel": "max",
+				"defaultLevel": "xhigh"
 			}
 		},
 		"claude-opus-4-8@default": {
@@ -8319,8 +8326,9 @@
 			"maxTokens": 128000,
 			"thinking": {
 				"mode": "anthropic-adaptive",
-				"minLevel": "minimal",
-				"maxLevel": "xhigh"
+				"minLevel": "low",
+				"maxLevel": "max",
+				"defaultLevel": "xhigh"
 			}
 		},
 		"claude-opus-4@20250514": {
@@ -61783,8 +61791,9 @@
 			"maxTokens": 128000,
 			"thinking": {
 				"mode": "anthropic-adaptive",
-				"minLevel": "minimal",
-				"maxLevel": "xhigh"
+				"minLevel": "low",
+				"maxLevel": "max",
+				"defaultLevel": "xhigh"
 			}
 		},
 		"claude-opus-4-8": {
@@ -61808,8 +61817,9 @@
 			"maxTokens": 128000,
 			"thinking": {
 				"mode": "anthropic-adaptive",
-				"minLevel": "minimal",
-				"maxLevel": "xhigh"
+				"minLevel": "low",
+				"maxLevel": "max",
+				"defaultLevel": "xhigh"
 			}
 		},
 		"claude-sonnet-4": {
@@ -74528,8 +74538,9 @@
 			"maxTokens": 128000,
 			"thinking": {
 				"mode": "anthropic-adaptive",
-				"minLevel": "minimal",
-				"maxLevel": "xhigh"
+				"minLevel": "low",
+				"maxLevel": "max",
+				"defaultLevel": "xhigh"
 			}
 		},
 		"anthropic/claude-opus-4.8": {
@@ -74553,8 +74564,9 @@
 			"maxTokens": 128000,
 			"thinking": {
 				"mode": "anthropic-adaptive",
-				"minLevel": "minimal",
-				"maxLevel": "xhigh"
+				"minLevel": "low",
+				"maxLevel": "max",
+				"defaultLevel": "xhigh"
 			}
 		},
 		"anthropic/claude-sonnet-4": {
@@ -79789,8 +79801,9 @@
 			"maxTokens": 128000,
 			"thinking": {
 				"mode": "anthropic-adaptive",
-				"minLevel": "minimal",
-				"maxLevel": "xhigh"
+				"minLevel": "low",
+				"maxLevel": "max",
+				"defaultLevel": "xhigh"
 			}
 		},
 		"anthropic/claude-opus-4.8": {
@@ -79814,8 +79827,9 @@
 			"maxTokens": 8888,
 			"thinking": {
 				"mode": "anthropic-adaptive",
-				"minLevel": "minimal",
-				"maxLevel": "xhigh"
+				"minLevel": "low",
+				"maxLevel": "max",
+				"defaultLevel": "xhigh"
 			}
 		},
 		"anthropic/claude-sonnet-4": {

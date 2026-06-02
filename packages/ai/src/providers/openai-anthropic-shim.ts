@@ -8,6 +8,7 @@
  * here once.
  */
 
+import { toWireEffort } from "../model-thinking";
 import { ANTHROPIC_THINKING } from "../stream";
 import type { Context, Model, SimpleStreamOptions } from "../types";
 import { AssistantMessageEventStream } from "../utils/event-stream";
@@ -118,7 +119,7 @@ export function streamOpenAIAnthropicShim(
 					onResponse: options?.onResponse,
 					onSseEvent: options?.onSseEvent,
 					fetch: options?.fetch,
-					reasoning: reasoningEffort,
+					reasoning: toWireEffort(reasoningEffort),
 				});
 
 				for await (const event of innerStream) {

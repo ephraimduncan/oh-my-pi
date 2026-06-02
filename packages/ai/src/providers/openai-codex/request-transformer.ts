@@ -1,5 +1,5 @@
 import type { Effort } from "../../model-thinking";
-import { requireSupportedEffort } from "../../model-thinking";
+import { requireSupportedEffort, toWireEffort } from "../../model-thinking";
 import type { Api, Model } from "../../types";
 
 export interface ReasoningConfig {
@@ -54,7 +54,9 @@ export interface RequestBody {
 function getReasoningConfig(model: Model<Api>, options: CodexRequestOptions): ReasoningConfig {
 	const config: ReasoningConfig = {
 		effort:
-			options.reasoningEffort === "none" ? "none" : requireSupportedEffort(model, options.reasoningEffort as Effort),
+			options.reasoningEffort === "none"
+				? "none"
+				: toWireEffort(requireSupportedEffort(model, options.reasoningEffort as Effort)),
 	};
 	if (options.reasoningSummary !== null) {
 		config.summary = options.reasoningSummary ?? "detailed";

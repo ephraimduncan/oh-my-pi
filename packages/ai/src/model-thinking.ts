@@ -8,6 +8,7 @@ export const enum Effort {
 	Medium = "medium",
 	High = "high",
 	XHigh = "xhigh",
+	Max = "max",
 }
 
 export const THINKING_EFFORTS: readonly Effort[] = [
@@ -16,6 +17,7 @@ export const THINKING_EFFORTS: readonly Effort[] = [
 	Effort.Medium,
 	Effort.High,
 	Effort.XHigh,
+	Effort.Max,
 ];
 
 const DEFAULT_REASONING_EFFORTS: readonly Effort[] = [Effort.Minimal, Effort.Low, Effort.Medium, Effort.High];
@@ -25,6 +27,13 @@ const DEFAULT_REASONING_EFFORTS_WITH_XHIGH: readonly Effort[] = [
 	Effort.Medium,
 	Effort.High,
 	Effort.XHigh,
+];
+const OPUS_MESSAGES_ADAPTIVE_EFFORTS: readonly Effort[] = [
+	Effort.Low,
+	Effort.Medium,
+	Effort.High,
+	Effort.XHigh,
+	Effort.Max,
 ];
 const GEMINI_3_PRO_EFFORTS: readonly Effort[] = [Effort.Low, Effort.High];
 const GEMINI_3_FLASH_EFFORTS: readonly Effort[] = [Effort.Minimal, Effort.Low, Effort.Medium, Effort.High];
@@ -299,6 +308,25 @@ export function requireSupportedEffort<TApi extends Api>(model: ApiModel<TApi>, 
 	return effort;
 }
 
+/**
+ * Effort levels accepted by non-Anthropic wire APIs (OpenAI / xAI / Google /
+ * Ollama families), which cap at `xhigh`. `Max` is Anthropic-adaptive-only.
+ */
+export type WireEffort = Exclude<Effort, Effort.Max>;
+
+/**
+ * Coerce a user-facing effort down to the {@link WireEffort} scale. `Max` is
+ * never in a non-Anthropic model's supported set (so this only fires
+ * defensively), but it keeps those providers' wire unions total now that the
+ * universal {@link Effort} scale carries a top "max" tier for Opus 4.7+.
+ */
+export function toWireEffort(effort: Effort): WireEffort;
+export function toWireEffort(effort: Effort | undefined): WireEffort | undefined;
+export function toWireEffort(effort: Effort | undefined): WireEffort | undefined {
+	if (effort === undefined) return undefined;
+	return effort === Effort.Max ? Effort.XHigh : effort;
+}
+
 /** Maps a normalized thinking effort to Google's `thinkingLevel` enum values. */
 export function mapEffortToGoogleThinkingLevel<TApi extends Api>(
 	model: ApiModel<TApi>,
@@ -313,6 +341,7 @@ export function mapEffortToGoogleThinkingLevel<TApi extends Api>(
 			return "MEDIUM";
 		case Effort.High:
 		case Effort.XHigh:
+		case Effort.Max:
 			return "HIGH";
 	}
 }
@@ -324,25 +353,26 @@ export function mapEffortToAnthropicAdaptiveEffort<TApi extends Api>(
 ): "low" | "medium" | "high" | "xhigh" | "max" {
 	const supported = requireSupportedEffort(model, effort);
 	if (anthropicModelHasRealXHighEffort(model)) {
-		// Opus 4.7+ on the Messages API exposes the full five-tier adaptive scale
-		// (low/medium/high/xhigh/max). Shift our user-facing efforts up one notch so
-		// the top tier reaches the genuine "max" and "high" lands on Anthropic's
-		// recommended "xhigh" coding/agentic default.
+		// Opus 4.7+ on the Messages API exposes Anthropic's genuine five-tier
+		// adaptive scale (low/medium/high/xhigh/max). getSupportedEfforts only
+		// offers low..max here, so map 1:1; Minimal stays covered for exhaustiveness.
 		switch (supported) {
 			case Effort.Minimal:
-				return "low";
 			case Effort.Low:
-				return "medium";
+				return "low";
 			case Effort.Medium:
-				return "high";
+				return "medium";
 			case Effort.High:
-				return "xhigh";
+				return "high";
 			case Effort.XHigh:
+				return "xhigh";
+			case Effort.Max:
 				return "max";
 		}
 	}
-	// Older adaptive models (Opus 4.6) and Bedrock Converse expose only four tiers
-	// with no real "xhigh"; XHigh is a legacy alias for the top "max" tier there.
+	// Legacy adaptive models (Opus 4.6) and Bedrock Converse expose only four
+	// tiers with no real "xhigh"; XHigh — and the never-offered Max — alias to the
+	// top "max" tier there.
 	switch (supported) {
 		case Effort.Minimal:
 		case Effort.Low:
@@ -352,6 +382,7 @@ export function mapEffortToAnthropicAdaptiveEffort<TApi extends Api>(
 		case Effort.High:
 			return "high";
 		case Effort.XHigh:
+		case Effort.Max:
 			return "max";
 	}
 }
@@ -518,6 +549,17 @@ function inferModelThinking<TApi extends Api>(model: ApiModel<TApi>): ThinkingCo
 	if (expandedRange.length !== efforts.length) {
 		config.levels = efforts;
 	}
+	// Opus 4.7+ on the Messages API: default to xhigh — Anthropic's recommended
+	// coding/agentic effort — so surfacing the genuine five-tier scale does not
+	// silently drop the out-of-box thinking depth from xhigh down to high.
+	if (
+		model.api === "anthropic-messages" &&
+		parsedModel.family === "anthropic" &&
+		parsedModel.kind === "opus" &&
+		semverGte(parsedModel.version, "4.7")
+	) {
+		config.defaultLevel = Effort.XHigh;
+	}
 	return config;
 }
 
@@ -586,6 +628,12 @@ function inferAnthropicSupportedEfforts<TApi extends Api>(
 	parsedModel: AnthropicModel,
 	model: ApiModel<TApi>,
 ): readonly Effort[] {
+	// Opus 4.7+ on the Messages API exposes Anthropic's genuine five-tier adaptive
+	// scale (low/medium/high/xhigh/max), surfaced 1:1 with no effort shift. Mirrors
+	// anthropicModelHasRealXHighEffort (the wire-mapping counterpart).
+	if (model.api === "anthropic-messages" && parsedModel.kind === "opus" && semverGte(parsedModel.version, "4.7")) {
+		return OPUS_MESSAGES_ADAPTIVE_EFFORTS;
+	}
 	if (
 		(model.api === "anthropic-messages" || model.api === "bedrock-converse-stream") &&
 		semverGte(parsedModel.version, "4.6")

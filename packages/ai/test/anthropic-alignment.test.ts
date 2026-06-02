@@ -1361,7 +1361,7 @@ describe("Anthropic request fingerprint alignment", () => {
 		expect(payload.context_management).toEqual({
 			edits: [{ type: "clear_thinking_20251015", keep: "all" }],
 		});
-		expect(payload.output_config).toEqual({ effort: "xhigh" });
+		expect(payload.output_config).toEqual({ effort: "high" });
 
 		const maxPayload = (await captureAnthropicPayload(
 			{
@@ -1371,7 +1371,7 @@ describe("Anthropic request fingerprint alignment", () => {
 				thinking: {
 					mode: "anthropic-adaptive",
 					minLevel: Effort.Minimal,
-					maxLevel: Effort.XHigh,
+					maxLevel: Effort.Max,
 				},
 			},
 			{
@@ -1380,7 +1380,7 @@ describe("Anthropic request fingerprint alignment", () => {
 			},
 			{
 				thinkingEnabled: true,
-				reasoning: Effort.XHigh,
+				reasoning: Effort.Max,
 			},
 		)) as {
 			thinking?: { type?: string; display?: string };
@@ -1419,7 +1419,7 @@ describe("Anthropic request fingerprint alignment", () => {
 
 		expect(payload.thinking).toEqual({ type: "adaptive", display: "summarized" });
 		expect(payload.context_management).toBeUndefined();
-		expect(payload.output_config).toEqual({ effort: "xhigh" });
+		expect(payload.output_config).toEqual({ effort: "high" });
 	});
 
 	it("sends task budgets through Anthropic output_config without dropping adaptive effort", async () => {
@@ -1451,7 +1451,7 @@ describe("Anthropic request fingerprint alignment", () => {
 		};
 
 		expect(payload.output_config).toEqual({
-			effort: "xhigh",
+			effort: "high",
 			task_budget: { type: "tokens", total: 64_000, remaining: 48_000 },
 		});
 	});

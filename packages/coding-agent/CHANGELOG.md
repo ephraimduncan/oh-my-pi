@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- The thinking-level picker now offers a `max` level for Claude Opus 4.7+, surfacing Anthropic's top adaptive effort (matching Claude Code). `ultrathink` prompts resolve to the model's genuine highest supported tier (`max` where available).
+
 ## [15.8.1] - 2026-06-02
 
 ### Fixed

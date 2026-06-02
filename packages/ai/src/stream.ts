@@ -3,12 +3,13 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { $env, $pickenv, extractHttpStatusFromError } from "@oh-my-pi/pi-utils";
 import { getCustomApi } from "./api-registry";
-import type { Effort } from "./model-thinking";
+import type { Effort, WireEffort } from "./model-thinking";
 import {
 	mapEffortToAnthropicAdaptiveEffort,
 	mapEffortToGoogleThinkingLevel,
 	modelOmitsReasoningEffort,
 	requireSupportedEffort,
+	toWireEffort,
 } from "./model-thinking";
 import type { BedrockOptions } from "./providers/amazon-bedrock";
 import type { AnthropicOptions } from "./providers/anthropic";
@@ -605,6 +606,7 @@ export const ANTHROPIC_THINKING: Record<Effort, number> = {
 	medium: 8192,
 	high: 16384,
 	xhigh: 32768,
+	max: 32768,
 };
 
 const GOOGLE_THINKING: Record<Effort, number> = {
@@ -613,6 +615,7 @@ const GOOGLE_THINKING: Record<Effort, number> = {
 	medium: 8192,
 	high: 16384,
 	xhigh: 24575,
+	max: 24575,
 };
 
 const BEDROCK_CLAUDE_THINKING: Record<Effort, number> = {
@@ -621,6 +624,7 @@ const BEDROCK_CLAUDE_THINKING: Record<Effort, number> = {
 	medium: 8192,
 	high: 16384,
 	xhigh: 16384,
+	max: 16384,
 };
 
 function resolveBedrockThinkingBudget(
@@ -691,7 +695,7 @@ function mapOpenAiToolChoice(choice?: ToolChoice): OpenAICompletionsOptions["too
 function resolveOpenAiReasoningEffort<TApi extends Api>(
 	model: Model<TApi>,
 	options?: SimpleStreamOptions,
-): Effort | undefined {
+): WireEffort | undefined {
 	const reasoning = options?.reasoning;
 	if (!reasoning || !model.reasoning) return undefined;
 	// Models with compat.supportsReasoningEffort: false reason natively but
@@ -702,7 +706,7 @@ function resolveOpenAiReasoningEffort<TApi extends Api>(
 	// "Compaction failed: Thinking effort high is not supported by..." to
 	// the user.
 	if (modelOmitsReasoningEffort(model)) return undefined;
-	return requireSupportedEffort(model, reasoning);
+	return toWireEffort(requireSupportedEffort(model, reasoning));
 }
 
 const castApi = <TApi extends Api>(api: OptionsForApi<TApi>): OptionsForApi<Api> => api as OptionsForApi<Api>;

@@ -361,7 +361,7 @@ describe("AgentSession role model thinking behavior", () => {
 		const classifierSpy = vi.spyOn(autoThinkingClassifier, "classifyDifficulty").mockResolvedValue(Effort.Low);
 
 		session.setThinkingLevel(AUTO_THINKING);
-		const expected = clampAutoThinkingEffort(model, Effort.XHigh);
+		const expected = clampAutoThinkingEffort(model, Effort.Max);
 		await session.prompt("ultrathink through the unsafe refactor");
 
 		expect(classifierSpy).not.toHaveBeenCalled();

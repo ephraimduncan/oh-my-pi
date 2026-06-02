@@ -2,6 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added a top `max` thinking effort (`Effort.Max`). Claude Opus 4.7+ on the Messages API now exposes Anthropic's genuine five-tier adaptive scale (`low`/`medium`/`high`/`xhigh`/`max`) mapped 1:1 to the wire, matching the levels Claude Code offers.
+
+### Changed
+
+- Claude Opus 4.7+ (Messages API) thinking efforts now map 1:1 to Anthropic adaptive levels instead of the previous +1 shift, and carry `defaultLevel: "xhigh"` (Anthropic's recommended coding/agentic effort) so default thinking depth is unchanged. Bedrock Opus and budget-mode models keep their existing four-tier mapping (`xhigh` aliases to `max`).
+
 ## [15.8.0] - 2026-06-02
 ### Added
 

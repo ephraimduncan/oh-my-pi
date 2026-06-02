@@ -1,3 +1,4 @@
+import { toWireEffort } from "../model-thinking";
 import { ANTHROPIC_THINKING, mapAnthropicToolChoice } from "../stream";
 import type { Api, Context, FetchImpl, Model, SimpleStreamOptions } from "../types";
 import { AssistantMessageEventStream } from "../utils/event-stream";
@@ -319,7 +320,7 @@ export function streamGitLabDuo(
 									onResponse: options.onResponse,
 									onSseEvent: options.onSseEvent,
 									fetch: options.fetch,
-									reasoning: reasoningEffort,
+									reasoning: toWireEffort(reasoningEffort),
 									toolChoice: options.toolChoice,
 								} satisfies OpenAIResponsesOptions,
 							)
@@ -351,7 +352,7 @@ export function streamGitLabDuo(
 									onResponse: options.onResponse,
 									onSseEvent: options.onSseEvent,
 									fetch: options.fetch,
-									reasoning: reasoningEffort,
+									reasoning: toWireEffort(reasoningEffort),
 									toolChoice: options.toolChoice,
 								} satisfies OpenAICompletionsOptions,
 							);

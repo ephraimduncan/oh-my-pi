@@ -123,13 +123,21 @@ describe("model thinking metadata", () => {
 		});
 		// Opus 4.6 has no real xhigh level — pi-ai aliases XHigh to Anthropic's "max".
 		expect(mapEffortToAnthropicAdaptiveEffort(opus46, Effort.XHigh)).toBe("max");
-		// Opus 4.7+ on the Messages API exposes the full five-tier scale, so pi-ai
-		// shifts each user-facing effort up one notch and the top tier reaches "max".
-		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.Minimal)).toBe("low");
-		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.Low)).toBe("medium");
-		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.Medium)).toBe("high");
-		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.High)).toBe("xhigh");
-		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.XHigh)).toBe("max");
+		// Opus 4.7+ on the Messages API exposes Anthropic's genuine five-tier scale
+		// (low/medium/high/xhigh/max), mapped 1:1 with no shift, defaulting to xhigh.
+		expect(opus47.thinking).toEqual({
+			mode: "anthropic-adaptive",
+			minLevel: Effort.Low,
+			maxLevel: Effort.Max,
+			defaultLevel: Effort.XHigh,
+		});
+		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.Low)).toBe("low");
+		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.Medium)).toBe("medium");
+		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.High)).toBe("high");
+		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.XHigh)).toBe("xhigh");
+		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.Max)).toBe("max");
+		// Minimal is below Opus 4.7+'s floor (low) and is rejected.
+		expect(() => mapEffortToAnthropicAdaptiveEffort(opus47, Effort.Minimal)).toThrow(/not supported/);
 		// Bedrock Converse keeps the four-tier legacy mapping; xhigh aliases to "max".
 		expect(mapEffortToAnthropicAdaptiveEffort(opus47Bedrock, Effort.High)).toBe("high");
 		expect(mapEffortToAnthropicAdaptiveEffort(opus47Bedrock, Effort.XHigh)).toBe("max");

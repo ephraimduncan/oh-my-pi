@@ -10,7 +10,7 @@ import type {
 	ChatCompletionToolMessageParam,
 } from "openai/resources/chat/completions";
 import packageJson from "../../package.json" with { type: "json" };
-import { type Effort, getSupportedEfforts } from "../model-thinking";
+import { getSupportedEfforts, toWireEffort } from "../model-thinking";
 import { calculateCost } from "../models";
 import { getEnvApiKey } from "../stream";
 import {
@@ -1262,7 +1262,9 @@ function buildParams(
 		compat.supportsReasoningEffort
 	) {
 		// OpenAI-style reasoning_effort
-		params.reasoning_effort = mapReasoningEffort(options.reasoning, compat.reasoningEffortMap) as Effort;
+		params.reasoning_effort = mapReasoningEffort(options.reasoning, compat.reasoningEffortMap) as NonNullable<
+			OpenAICompletionsOptions["reasoning"]
+		>;
 	} else if (
 		supportsReasoningParams &&
 		options?.disableReasoning &&
@@ -1277,7 +1279,9 @@ function buildParams(
 		if (minEffort === undefined) {
 			throw new Error(`Model ${model.provider}/${model.id} has no supported reasoning efforts`);
 		}
-		params.reasoning_effort = mapReasoningEffort(minEffort, compat.reasoningEffortMap) as Effort;
+		params.reasoning_effort = mapReasoningEffort(toWireEffort(minEffort), compat.reasoningEffortMap) as NonNullable<
+			OpenAICompletionsOptions["reasoning"]
+		>;
 	}
 
 	if (compat.disableReasoningOnToolChoice && params.tool_choice !== undefined) {

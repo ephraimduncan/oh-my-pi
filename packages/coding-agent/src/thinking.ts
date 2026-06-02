@@ -32,7 +32,12 @@ const THINKING_LEVEL_METADATA: Record<ThinkingLevel, ThinkingLevelMetadata> = {
 	[ThinkingLevel.XHigh]: {
 		value: ThinkingLevel.XHigh,
 		label: "xhigh",
-		description: "Maximum reasoning (~32k tokens)",
+		description: "Very deep reasoning (~32k tokens)",
+	},
+	[ThinkingLevel.Max]: {
+		value: ThinkingLevel.Max,
+		label: "max",
+		description: "Maximum reasoning (no constraints)",
 	},
 };
 
