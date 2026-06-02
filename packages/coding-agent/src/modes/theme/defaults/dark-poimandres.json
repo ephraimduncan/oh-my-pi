@@ -127,6 +127,7 @@
       "thinking.medium": "◎",
       "thinking.high": "◉",
       "thinking.xhigh": "●",
+      "thinking.max": "⬤",
       "icon.model": "◇",
       "icon.plan": "◈",
       "icon.goal": "⊙",

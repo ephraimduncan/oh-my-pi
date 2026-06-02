@@ -132,6 +132,7 @@ export type SymbolKey =
 	| "thinking.medium"
 	| "thinking.high"
 	| "thinking.xhigh"
+	| "thinking.max"
 	| "thinking.autoPending"
 	// Checkboxes
 	| "checkbox.checked"
@@ -298,6 +299,7 @@ const UNICODE_SYMBOLS: SymbolMap = {
 	"thinking.medium": "◒ med",
 	"thinking.high": "◕ high",
 	"thinking.xhigh": "◉ xhigh",
+	"thinking.max": "● max",
 	"thinking.autoPending": "▣?",
 	// Checkboxes
 	"checkbox.checked": "☑",
@@ -552,6 +554,8 @@ const NERD_SYMBOLS: SymbolMap = {
 	"thinking.high": "\u{F111} high",
 	// pick: 🧠 xhi | alt:  xhi  xhi
 	"thinking.xhigh": "\u{F06D} xhi",
+	// max — reuses the xhi glyph; the "max" label differentiates it.
+	"thinking.max": "\u{F06D} max",
 	// pick: 󰞋 (nf-md-help_box) | alt:  [?]
 	"thinking.autoPending": "\u{f078b}",
 	// Checkboxes
@@ -727,6 +731,7 @@ const ASCII_SYMBOLS: SymbolMap = {
 	"thinking.medium": "[med]",
 	"thinking.high": "[high]",
 	"thinking.xhigh": "[xhi]",
+	"thinking.max": "[max]",
 	"thinking.autoPending": "[?]",
 	// Checkboxes
 	"checkbox.checked": "[x]",
@@ -1388,6 +1393,9 @@ export class Theme {
 				return (str: string) => this.fg("thinkingHigh", str);
 			case "xhigh":
 				return (str: string) => this.fg("thinkingXhigh", str);
+			case "max":
+				// Top tier shares xhigh's border color (highest-intensity thinking).
+				return (str: string) => this.fg("thinkingXhigh", str);
 			default:
 				return (str: string) => this.fg("thinkingOff", str);
 		}
@@ -1559,6 +1567,7 @@ export class Theme {
 			medium: this.#symbols["thinking.medium"],
 			high: this.#symbols["thinking.high"],
 			xhigh: this.#symbols["thinking.xhigh"],
+			max: this.#symbols["thinking.max"],
 			autoPending: this.#symbols["thinking.autoPending"],
 		};
 	}

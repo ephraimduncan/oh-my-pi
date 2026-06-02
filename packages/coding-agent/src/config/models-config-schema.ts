@@ -45,7 +45,8 @@ export const OpenAICompatSchema = z.object({
 	toolStrictMode: z.enum(["all_strict", "none"]).optional(),
 });
 
-const EffortSchema = z.enum(["minimal", "low", "medium", "high", "xhigh"]);
+// Mirror of `Effort` / `THINKING_EFFORTS` in @oh-my-pi/pi-ai — keep in sync when tiers change.
+const EffortSchema = z.enum(["minimal", "low", "medium", "high", "xhigh", "max"]);
 
 const ThinkingControlModeSchema = z.enum([
 	"effort",
