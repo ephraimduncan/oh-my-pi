@@ -373,7 +373,7 @@ So a model can exist in registry but not be selectable until auth is available.
 - exact model id (provider inferred)
 - fuzzy/substring matching
 - glob scope patterns in `--models` (e.g. `openai/*`, `*sonnet*`)
-- optional `:thinkingLevel` suffix (`off|minimal|low|medium|high|xhigh`)
+- optional `:thinkingLevel` suffix (`off|minimal|low|medium|high|xhigh|max`)
 
 `--provider` is legacy; `--model` is preferred.
 

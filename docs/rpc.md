@@ -151,7 +151,7 @@ Data payloads are command-specific and defined in `rpc-types.ts`.
 ```json
 {
   "model": { "provider": "...", "id": "..." },
-  "thinkingLevel": "off|minimal|low|medium|high|xhigh",
+  "thinkingLevel": "off|minimal|low|medium|high|xhigh|max",
   "isStreaming": false,
   "isCompacting": false,
   "steeringMode": "all|one-at-a-time",
