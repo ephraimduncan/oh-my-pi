@@ -161,4 +161,27 @@ describe("createWorktree (integration)", () => {
 		tempDirs.push(bare);
 		await expect(createWorktree(bare, "foo")).rejects.toThrow(/git repository/);
 	});
+
+	it("does not create a worktree when a worktree-independent validation rejects the invocation", async () => {
+		// Regression (PR #1773 review): the RPC `@file` check must run before
+		// createWorktree(), so an invalid invocation leaves no junk worktree/branch.
+		const repo = await createGitRepo();
+		const home = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "omp-wt-home-")));
+		tempDirs.push(home);
+		const cliPath = path.join(import.meta.dir, "../src/cli.ts");
+		const proc = Bun.spawn([process.execPath, cliPath, "--worktree", "wtjunk", "--mode", "rpc", "@notes.md"], {
+			cwd: repo,
+			env: { ...process.env, HOME: home, PI_NO_TITLE: "1" },
+			stdout: "pipe",
+			stderr: "pipe",
+		});
+		const exitCode = await proc.exited;
+		const stderr = await new Response(proc.stderr).text();
+
+		expect(exitCode).toBe(1);
+		expect(stderr).toContain("@file arguments are not supported");
+		// The rejected invocation must not have created a worktree or branch.
+		await expect(fs.stat(path.join(repo, ".omp", "worktrees", "wtjunk"))).rejects.toThrow();
+		expect(await git.branch.list(repo)).not.toContain("worktree-wtjunk");
+	}, 20_000);
 });

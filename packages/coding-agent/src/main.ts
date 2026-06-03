@@ -777,11 +777,19 @@ export async function runRootCommand(
 		process.exit(0);
 	}
 
+	// Reject invocations that the parsed args alone prove invalid before any
+	// side-effecting startup work, so a bad command never leaves state behind.
+	if ((parsedArgs.mode === "rpc" || parsedArgs.mode === "rpc-ui") && parsedArgs.fileArgs.length > 0) {
+		process.stderr.write(`${chalk.red("Error: @file arguments are not supported in RPC mode")}\n`);
+		process.exit(1);
+	}
+
 	// `--worktree` / `-w`: create an isolated git worktree and enter it before any
 	// settings, plugin, or session work, so everything downstream is scoped to the
-	// worktree. Placed after the early-exit flags (version/list-models/export) so
-	// those never create one. No cache clearing is needed (unlike the resume
-	// cross-project switch below) because nothing cwd-derived has loaded yet.
+	// worktree. Placed after the early-exit flags and the cheap input validation
+	// above (version/list-models/export, RPC `@file`) so an invalid invocation never
+	// leaves a junk worktree/branch behind. No cache clearing is needed (unlike the
+	// resume cross-project switch below) because nothing cwd-derived has loaded yet.
 	if (parsedArgs.worktree !== undefined) {
 		try {
 			const worktree = await logger.time("createWorktree", createWorktree, getProjectDir(), parsedArgs.worktree);
@@ -791,11 +799,6 @@ export async function runRootCommand(
 			process.stderr.write(`${chalk.red(`Error: ${message}`)}\n`);
 			process.exit(1);
 		}
-	}
-
-	if ((parsedArgs.mode === "rpc" || parsedArgs.mode === "rpc-ui") && parsedArgs.fileArgs.length > 0) {
-		process.stderr.write(`${chalk.red("Error: @file arguments are not supported in RPC mode")}\n`);
-		process.exit(1);
 	}
 
 	// Kick off plugin-root preload in parallel with the remaining startup work.
