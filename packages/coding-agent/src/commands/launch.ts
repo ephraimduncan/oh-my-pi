@@ -65,6 +65,14 @@ export default class Index extends Command {
 			char: "r",
 			description: "Resume a session (by ID prefix, path, or picker if omitted)",
 		}),
+		// `--worktree`/`-w`: declared here so oclif's `--help` lists it; runtime
+		// parsing happens in `cli/args.ts parseArgs` and is handled in `main.ts`
+		// (the name is optional, so the manual parser owns the value semantics).
+		worktree: Flags.string({
+			char: "w",
+			description:
+				"Create an isolated git worktree under .omp/worktrees and start the session in it (name optional)",
+		}),
 		"session-dir": Flags.string({
 			description: "Directory for session storage and lookup",
 		}),

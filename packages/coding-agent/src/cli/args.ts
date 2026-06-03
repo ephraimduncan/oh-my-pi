@@ -49,6 +49,8 @@ export interface Args {
 	noTitle?: boolean;
 	autoApprove?: boolean;
 	approvalMode?: "always-ask" | "write" | "yolo";
+	/** `--worktree`/`-w`: explicit name (string) or auto-generate (`true`). */
+	worktree?: string | true;
 	messages: string[];
 	fileArgs: string[];
 	/** Unknown flags (potentially extension flags) - map of flag name to value */
@@ -122,6 +124,15 @@ export function parseArgs(inputArgs: string[], extensionFlags?: Map<string, { ty
 				result.resume = args[++i];
 			} else {
 				result.resume = true;
+			}
+		} else if (arg === "--worktree" || arg === "-w") {
+			// Optional value: consume the next token as the worktree name unless it
+			// is a flag (`-`) or a file arg (`@`); otherwise auto-generate a name.
+			const next = args[i + 1];
+			if (next && !next.startsWith("-") && !next.startsWith("@")) {
+				result.worktree = args[++i];
+			} else {
+				result.worktree = true;
 			}
 		} else if (arg === "--fork" && i + 1 < args.length) {
 			result.fork = args[++i];
