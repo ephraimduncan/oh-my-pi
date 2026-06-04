@@ -4,11 +4,15 @@ type OpenAIReasoningEffort = "minimal" | "low" | "medium" | "high" | "xhigh";
 type ResolvedToolStrictMode = NonNullable<OpenAICompat["toolStrictMode"]> | "mixed";
 
 export type ResolvedOpenAICompat = Required<
-	Omit<OpenAICompat, "openRouterRouting" | "vercelGatewayRouting" | "extraBody" | "toolStrictMode">
+	Omit<
+		OpenAICompat,
+		"openRouterRouting" | "vercelGatewayRouting" | "extraBody" | "toolStrictMode" | "cacheControlFormat"
+	>
 > & {
 	openRouterRouting?: OpenAICompat["openRouterRouting"];
 	vercelGatewayRouting?: OpenAICompat["vercelGatewayRouting"];
 	extraBody?: OpenAICompat["extraBody"];
+	cacheControlFormat?: OpenAICompat["cacheControlFormat"];
 	toolStrictMode: ResolvedToolStrictMode;
 };
 
@@ -75,6 +79,10 @@ export function detectOpenAICompat(model: Model<"openai-completions">, resolvedB
 	// applies when thinking mode is actually engaged.
 	const lowerId = model.id.toLowerCase();
 	const lowerName = (model.name ?? "").toLowerCase();
+	const isXiaomiHost =
+		provider === "xiaomi" || provider.startsWith("xiaomi-token-plan-") || baseUrl.includes("xiaomimimo.com");
+	const isMimoModel = lowerId.includes("mimo") || lowerName.includes("mimo");
+	const isXiaomiMimo = isXiaomiHost && isMimoModel;
 	// OpenCode Zen's `big-pickle` is a DeepSeek reasoning alias; the upstream
 	// 400s come from DeepSeek and require exact reasoning_content replay.
 	const isOpenCodeDeepseekAlias =
@@ -101,6 +109,7 @@ export function detectOpenAICompat(model: Model<"openai-completions">, resolvedB
 		isZhipu ||
 		isKilo ||
 		isQwen ||
+		isXiaomiHost ||
 		provider === "opencode-zen" ||
 		provider === "opencode-go" ||
 		baseUrl.includes("opencode.ai");
@@ -197,7 +206,7 @@ export function detectOpenAICompat(model: Model<"openai-completions">, resolvedB
 		// OpenAI's reasoning-API surface.
 		supportsDeveloperRole: isOpenAIHost || isAzureHost,
 		supportsMultipleSystemMessages: supportsMultipleSystemMessagesDefault,
-		supportsReasoningEffort: !isGrok && !isZai && !isZhipu,
+		supportsReasoningEffort: !isGrok && !isZai && !isZhipu && !isXiaomiMimo,
 		reasoningEffortMap,
 		supportsUsageInStreaming: !isCerebras,
 		disableReasoningOnForcedToolChoice: isKimiModel || isAnthropicModel,
@@ -214,7 +223,7 @@ export function detectOpenAICompat(model: Model<"openai-completions">, resolvedB
 		// etc. — drives reasoning via OpenAI-style `reasoning_effort`
 		// (low|medium|high|xhigh|max|none), so those stay on the "openai" path.
 		thinkingFormat:
-			isZai || isZhipu || isMoonshotKimi
+			isZai || isZhipu || isMoonshotKimi || isXiaomiMimo
 				? "zai"
 				: provider === "openrouter" || baseUrl.includes("openrouter.ai")
 					? "openrouter"
@@ -226,6 +235,8 @@ export function detectOpenAICompat(model: Model<"openai-completions">, resolvedB
 		//   - Kimi: documented invariant on its native API.
 		//   - DeepSeek-family reasoning models, including aliased OpenCode Zen models
 		//     like `big-pickle`, validate exact thinking-mode replay.
+		//   - Xiaomi MiMo models require exact `reasoning_content` replay on
+		//     thinking-mode tool-call continuations across standard and Token Plan hosts.
 		//   - Any reasoning-capable model reached through OpenRouter can enforce this
 		//     server-side whenever the request is in thinking mode. We can't translate
 		//     Anthropic's redacted/encrypted reasoning into provider-native plaintext,
@@ -235,11 +246,13 @@ export function detectOpenAICompat(model: Model<"openai-completions">, resolvedB
 		requiresReasoningContentForToolCalls:
 			(isKimiModel && !isOpenCodeProvider) ||
 			(isDeepseekFamily && Boolean(model.reasoning)) ||
+			isXiaomiMimo ||
 			((provider === "openrouter" || baseUrl.includes("openrouter.ai")) && Boolean(model.reasoning)),
-		// DeepSeek V4 rejects synthetic reasoning_content placeholders (".") on tool-call turns.
+		// DeepSeek V4 and Xiaomi MiMo reject synthetic reasoning_content placeholders (".") on tool-call turns.
 		// Kimi and OpenRouter accept them when actual reasoning is unavailable.
-		allowsSyntheticReasoningContentForToolCalls: !isDeepseekFamily || !model.reasoning,
+		allowsSyntheticReasoningContentForToolCalls: (!isDeepseekFamily || !model.reasoning) && !isXiaomiMimo,
 		requiresAssistantContentForToolCalls: isKimiModel || isDirectDeepseekReasoning,
+		cacheControlFormat: isOpenRouter && model.id.startsWith("anthropic/") ? "anthropic" : undefined,
 		openRouterRouting: undefined,
 		vercelGatewayRouting: undefined,
 		supportsStrictMode: detectStrictModeSupport(provider, baseUrl),
@@ -288,6 +301,7 @@ export function resolveOpenAICompat(
 			detected.allowsSyntheticReasoningContentForToolCalls,
 		requiresAssistantContentForToolCalls:
 			model.compat.requiresAssistantContentForToolCalls ?? detected.requiresAssistantContentForToolCalls,
+		cacheControlFormat: model.compat.cacheControlFormat ?? detected.cacheControlFormat,
 		disableReasoningOnForcedToolChoice:
 			model.compat.disableReasoningOnForcedToolChoice ?? detected.disableReasoningOnForcedToolChoice,
 		disableReasoningOnToolChoice: model.compat.disableReasoningOnToolChoice ?? detected.disableReasoningOnToolChoice,

@@ -142,6 +142,9 @@ export type KnownProvider =
 	| "venice"
 	| "vllm"
 	| "xiaomi"
+	| "xiaomi-token-plan-sgp"
+	| "xiaomi-token-plan-ams"
+	| "xiaomi-token-plan-cn"
 	| "wafer-pass"
 	| "wafer-serverless"
 	| "zenmux"
@@ -815,6 +818,8 @@ export interface OpenAICompat {
 	vercelGatewayRouting?: VercelGatewayRouting;
 	/** Extra fields to include in request body (e.g. gateway routing hints for OpenClaw-style proxies). */
 	extraBody?: Record<string, unknown>;
+	/** Whether chat-completions payloads should include provider-specific prompt-cache markers. */
+	cacheControlFormat?: "anthropic" | undefined;
 	/** Whether the provider supports the `strict` field in tool definitions. Default: auto-detected per provider/baseUrl (conservative for unknown providers). */
 	supportsStrictMode?: boolean;
 	/** Whether tool schemas must be sent either all strict or all non-strict. Undefined keeps the existing per-tool mixed behavior. */
