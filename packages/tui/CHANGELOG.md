@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added inline slash-command completion. `CombinedAutocompleteProvider` and `Editor` now complete `/command` tokens at any whitespace boundary, not only the leading token, gated by a new optional `SlashCommand.inlineEligible` flag so hosts can offer several inline command/skill references in one message. Absolute-path completion and leading-command behavior are unchanged; completing an inline reference applies the token without submitting the message. (by [@ephraimduncan](https://github.com/ephraimduncan))
+
 ## [15.9.0] - 2026-06-04
 
 ### Added

@@ -1030,8 +1030,15 @@ export class Editor implements Component, Focusable {
 					return;
 				}
 
-				// If Enter was pressed on a slash command, apply completion and submit
-				if ((kb.matches(data, "tui.input.submit") || data === "\n") && this.#autocompletePrefix.startsWith("/")) {
+				// If Enter was pressed on a LEADING slash command, apply completion and
+				// submit (the command is the whole message). Inline slash references
+				// (mid-message skill mentions) fall through to the apply-without-submit
+				// branch below so the user can keep composing.
+				if (
+					(kb.matches(data, "tui.input.submit") || data === "\n") &&
+					this.#autocompletePrefix.startsWith("/") &&
+					this.#isInSubmittedSlashCommandContext()
+				) {
 					// Check for stale autocomplete state due to debounce
 					const currentLine = this.#state.lines[this.#state.cursorLine] ?? "";
 					const currentTextBeforeCursor = currentLine.slice(0, this.#state.cursorCol);
@@ -1538,8 +1545,9 @@ export class Editor implements Component, Focusable {
 
 		// Check if we should trigger or update autocomplete
 		if (!this.#autocompleteState) {
-			// Auto-trigger for "/" at the start of a line (slash commands)
-			if (char === "/" && this.#isAtStartOfSubmittedMessage()) {
+			// Auto-trigger for "/" at the start of a line (leading command) or as an
+			// inline skill/command reference anywhere on the line.
+			if (char === "/" && (this.#isAtStartOfSubmittedMessage() || this.#isInInlineSlashContext())) {
 				this.#tryTriggerAutocomplete();
 			}
 			// Auto-trigger for "@" file reference (fuzzy search)
@@ -1562,6 +1570,10 @@ export class Editor implements Component, Focusable {
 				const textBeforeCursor = currentLine.slice(0, this.#state.cursorCol);
 				// Check if we're in a slash command (with or without space for arguments)
 				if (this.#isInSubmittedSlashCommandContext()) {
+					this.#tryTriggerAutocomplete();
+				}
+				// Inline slash reference (additional skill/command tokens in the message)
+				else if (this.#isInInlineSlashContext()) {
 					this.#tryTriggerAutocomplete();
 				}
 				// Check if we're in an @ file reference context
@@ -1763,6 +1775,10 @@ export class Editor implements Component, Focusable {
 			if (this.#isInSubmittedSlashCommandContext()) {
 				this.#tryTriggerAutocomplete();
 			}
+			// Inline slash reference (additional skill/command tokens in the message)
+			else if (this.#isInInlineSlashContext()) {
+				this.#tryTriggerAutocomplete();
+			}
 			// @ file reference context
 			else if (textBeforeCursor.match(/(?:^|[\s])@[^\s]*$/)) {
 				this.#tryTriggerAutocomplete();
@@ -1921,6 +1937,8 @@ export class Editor implements Component, Focusable {
 			const currentLine = this.#state.lines[this.#state.cursorLine] || "";
 			const textBeforeCursor = currentLine.slice(0, this.#state.cursorCol);
 			if (this.#isInSubmittedSlashCommandContext()) {
+				this.#tryTriggerAutocomplete();
+			} else if (this.#isInInlineSlashContext()) {
 				this.#tryTriggerAutocomplete();
 			} else if (textBeforeCursor.match(/(?:^|[\s])@[^\s]*$/)) {
 				this.#tryTriggerAutocomplete();
@@ -2239,6 +2257,10 @@ export class Editor implements Component, Focusable {
 			if (this.#isInSubmittedSlashCommandContext()) {
 				this.#tryTriggerAutocomplete();
 			}
+			// Inline slash reference (additional skill/command tokens in the message)
+			else if (this.#isInInlineSlashContext()) {
+				this.#tryTriggerAutocomplete();
+			}
 			// @ file reference context
 			else if (textBeforeCursor.match(/(?:^|[\s])@[^\s]*$/)) {
 				this.#tryTriggerAutocomplete();
@@ -2457,6 +2479,17 @@ export class Editor implements Component, Focusable {
 		const currentLine = this.#state.lines[this.#state.cursorLine] || "";
 		const beforeCursor = currentLine.slice(0, this.#state.cursorCol);
 		return this.#hasOnlyWhitespaceBeforeCursorLine() && beforeCursor.trimStart().startsWith("/");
+	}
+
+	// An inline "/token" reference anywhere on the current line (start of line or
+	// after whitespace), with no inner "/" (absolute paths excluded) and no inner
+	// whitespace. Unlike #isInSubmittedSlashCommandContext this does NOT require
+	// the slash to lead the message, so several skill/command references can be
+	// completed within one prompt. MUST mirror the provider's findSlashCommandToken.
+	#isInInlineSlashContext(): boolean {
+		const currentLine = this.#state.lines[this.#state.cursorLine] || "";
+		const beforeCursor = currentLine.slice(0, this.#state.cursorCol);
+		return /(?:^|\s)\/[^\s/]*$/.test(beforeCursor);
 	}
 
 	#isSlashCommandNameAutocompleteSelection(): boolean {

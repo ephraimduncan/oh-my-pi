@@ -56,6 +56,27 @@ function isTokenStart(text: string, index: number): boolean {
 	return index === 0 || PATH_DELIMITERS.has(text[index - 1] ?? "");
 }
 
+/**
+ * Locate the slash-command token ending at the cursor. A slash token begins at
+ * the start of the line or immediately after whitespace, starts with "/", and
+ * contains no inner "/" or whitespace — so absolute paths (`/bin/sh`) and
+ * argument text are excluded. `isLeading` is true when only whitespace precedes
+ * the token (a leading command); false for an inline reference further along
+ * the line. Returns null when the text before the cursor is not such a token.
+ * MUST stay in sync with the editor's inline-slash trigger grammar.
+ */
+function findSlashCommandToken(textBeforeCursor: string): { token: string; isLeading: boolean } | null {
+	let start = textBeforeCursor.length;
+	while (start > 0 && !/\s/.test(textBeforeCursor[start - 1] ?? "")) {
+		start -= 1;
+	}
+	const token = textBeforeCursor.slice(start);
+	if (!token.startsWith("/")) return null;
+	if (token.indexOf("/", 1) !== -1) return null;
+	const isLeading = textBeforeCursor.slice(0, start).trim() === "";
+	return { token, isLeading };
+}
+
 function extractQuotedPrefix(text: string): string | null {
 	const quoteStart = findUnclosedQuoteStart(text);
 	if (quoteStart === null) {
@@ -167,6 +188,14 @@ export interface SlashCommand {
 	getArgumentCompletions?(argumentPrefix: string): Awaitable<AutocompleteItem[] | null>;
 	/** Return inline hint text for the current argument state (shown as dim ghost text after cursor) */
 	getInlineHint?(argumentText: string): string | null;
+	/**
+	 * When true, this command can be completed as an inline reference at any
+	 * token boundary (not only as the leading command of a message) — e.g.
+	 * skills and text-expanding templates that may be referenced several times
+	 * in one prompt. Control commands that take over the whole turn leave this
+	 * falsey so they stay leading-only.
+	 */
+	inlineEligible?: boolean;
 }
 
 export interface AutocompleteProvider {
@@ -265,53 +294,27 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 			};
 		}
 
-		// Check for slash commands
+		// Slash commands and inline skill references. A slash token may be the
+		// leading command of the message (which can take arguments) or an inline
+		// reference at any later token boundary. Inline references are restricted
+		// to `inlineEligible` commands so control commands (e.g. /model) stay
+		// leading-only and absolute paths are never shadowed.
+		const slashToken = findSlashCommandToken(textBeforeCursor);
+		if (slashToken) {
+			const lowerPrefix = slashToken.token.slice(1).toLowerCase();
+			const pool = slashToken.isLeading
+				? this.#commands
+				: this.#commands.filter(cmd => "inlineEligible" in cmd && cmd.inlineEligible);
+			const matches = this.#matchCommandNames(pool, lowerPrefix);
+			if (matches.length === 0) return null;
+			return { items: matches, prefix: slashToken.token };
+		}
+
+		// Leading command argument completion: the line begins with "/cmd " and
+		// the cursor sits in the argument region.
 		if (textBeforeCursor.startsWith("/")) {
 			const spaceIndex = textBeforeCursor.indexOf(" ");
-
-			if (spaceIndex === -1) {
-				// No space yet - complete command names
-				const prefix = textBeforeCursor.slice(1); // Remove the "/"
-				const lowerPrefix = prefix.toLowerCase();
-
-				// Filter commands using fuzzy matching (subsequence match)
-				const matches = this.#commands
-					.filter(cmd => {
-						const name = "name" in cmd ? cmd.name : cmd.value;
-						if (!name) return false;
-						// Match name or description
-						if (fuzzyMatch(lowerPrefix, name.toLowerCase())) return true;
-						const desc = cmd.description?.toLowerCase();
-						return desc ? fuzzyMatch(lowerPrefix, desc) : false;
-					})
-					.map(cmd => {
-						const name = "name" in cmd ? cmd.name : cmd.value;
-						const lowerName = name?.toLowerCase() ?? "";
-						const lowerDesc = cmd.description?.toLowerCase() ?? "";
-						// Score name matches higher than description matches
-						const nameScore = fuzzyMatch(lowerPrefix, lowerName) ? fuzzyScore(lowerPrefix, lowerName) : 0;
-						const descScore = fuzzyMatch(lowerPrefix, lowerDesc) ? fuzzyScore(lowerPrefix, lowerDesc) * 0.5 : 0;
-						const hint = "argumentHint" in cmd && cmd.argumentHint ? cmd.argumentHint : undefined;
-						const desc = cmd.description ?? "";
-						const fullDesc = hint ? (desc ? `${hint} — ${desc}` : hint) : desc;
-						return {
-							value: name,
-							label: "name" in cmd ? cmd.name : cmd.label,
-							score: Math.max(nameScore, descScore),
-							...(fullDesc && { description: fullDesc }),
-						};
-					})
-					.sort((a, b) => b.score - a.score)
-					.map(({ score: _, ...rest }) => rest);
-
-				if (matches.length === 0) return null;
-
-				return {
-					items: matches,
-					prefix: textBeforeCursor,
-				};
-			} else {
-				// Space found - complete command arguments
+			if (spaceIndex !== -1) {
 				const commandName = textBeforeCursor.slice(1, spaceIndex); // Command without "/"
 				const argumentText = textBeforeCursor.slice(spaceIndex + 1); // Text after space
 
@@ -333,6 +336,7 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 					prefix: argumentText,
 				};
 			}
+			return null;
 		}
 
 		// Check for file paths - triggered by Tab or if we detect a path pattern
@@ -363,6 +367,41 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 		return null;
 	}
 
+	/**
+	 * Fuzzy-filter and score command/skill names against a lowercased prefix,
+	 * returning dropdown items sorted best-first. Name matches outrank
+	 * description matches. Shared by leading and inline slash completion and the
+	 * synchronous fast path so they never diverge.
+	 */
+	#matchCommandNames(commands: (SlashCommand | AutocompleteItem)[], lowerPrefix: string): AutocompleteItem[] {
+		return commands
+			.filter(cmd => {
+				const name = "name" in cmd ? cmd.name : cmd.value;
+				if (!name) return false;
+				if (fuzzyMatch(lowerPrefix, name.toLowerCase())) return true;
+				const desc = cmd.description?.toLowerCase();
+				return desc ? fuzzyMatch(lowerPrefix, desc) : false;
+			})
+			.map(cmd => {
+				const name = "name" in cmd ? cmd.name : cmd.value;
+				const lowerName = name?.toLowerCase() ?? "";
+				const lowerDesc = cmd.description?.toLowerCase() ?? "";
+				const nameScore = fuzzyMatch(lowerPrefix, lowerName) ? fuzzyScore(lowerPrefix, lowerName) : 0;
+				const descScore = fuzzyMatch(lowerPrefix, lowerDesc) ? fuzzyScore(lowerPrefix, lowerDesc) * 0.5 : 0;
+				const hint = "argumentHint" in cmd && cmd.argumentHint ? cmd.argumentHint : undefined;
+				const desc = cmd.description ?? "";
+				const fullDesc = hint ? (desc ? `${hint} — ${desc}` : hint) : desc;
+				return {
+					value: name,
+					label: "name" in cmd ? cmd.name : cmd.label,
+					score: Math.max(nameScore, descScore),
+					...(fullDesc && { description: fullDesc }),
+				} as AutocompleteItem & { score: number };
+			})
+			.sort((a, b) => b.score - a.score)
+			.map(({ score: _score, ...rest }) => rest);
+	}
+
 	applyCompletion(
 		lines: string[],
 		cursorLine: number,
@@ -374,9 +413,16 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 		const beforePrefix = currentLine.slice(0, cursorCol - prefix.length);
 		const afterCursor = currentLine.slice(cursorCol);
 
-		// Check if we're completing a slash command (prefix starts with "/" but NOT a file path)
-		// Slash commands are at the start of the line and don't contain path separators after the first /
-		const isSlashCommand = prefix.startsWith("/") && beforePrefix.trim() === "" && !prefix.slice(1).includes("/");
+		// Completing a slash command or inline skill reference: the prefix is a
+		// "/token" with no inner "/" and the candidate is a command name. File-path
+		// candidates carry a leading "/" in their value, so an absolute-path
+		// completion is never mistaken for a command. Works for the leading command
+		// and for inline references later in the line.
+		const isSlashCommand =
+			prefix.startsWith("/") &&
+			!prefix.slice(1).includes("/") &&
+			!prefix.includes(" ") &&
+			!item.value.startsWith("/");
 		if (isSlashCommand) {
 			// This is a command name completion
 			const newLine = `${beforePrefix}/${item.value} ${afterCursor}`;
@@ -835,36 +881,8 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 		if (textBeforeCursor.length <= 1) return null; // Bare "/" alone, don't auto-complete
 		if (textBeforeCursor.includes(" ")) return null; // Only complete command name, not args
 
-		const prefix = textBeforeCursor.slice(1);
-		const lowerPrefix = prefix.toLowerCase();
-
-		const matches = this.#commands
-			.filter(cmd => {
-				const name = "name" in cmd ? cmd.name : cmd.value;
-				if (!name) return false;
-				if (fuzzyMatch(lowerPrefix, name.toLowerCase())) return true;
-				const desc = cmd.description?.toLowerCase();
-				return desc ? fuzzyMatch(lowerPrefix, desc) : false;
-			})
-			.map(cmd => {
-				const name = "name" in cmd ? cmd.name : cmd.value;
-				const lowerName = name?.toLowerCase() ?? "";
-				const lowerDesc = cmd.description?.toLowerCase() ?? "";
-				const nameScore = fuzzyMatch(lowerPrefix, lowerName) ? fuzzyScore(lowerPrefix, lowerName) : 0;
-				const descScore = fuzzyMatch(lowerPrefix, lowerDesc) ? fuzzyScore(lowerPrefix, lowerDesc) * 0.5 : 0;
-				const hint = "argumentHint" in cmd && cmd.argumentHint ? cmd.argumentHint : undefined;
-				const desc = cmd.description ?? "";
-				const fullDesc = hint ? (desc ? `${hint} — ${desc}` : hint) : desc;
-				return {
-					value: name,
-					label: "name" in cmd ? cmd.name : cmd.label,
-					score: Math.max(nameScore, descScore),
-					...(fullDesc && { description: fullDesc }),
-				} as AutocompleteItem & { score: number };
-			})
-			.sort((a, b) => b.score - a.score)
-			.map(({ score: _, ...rest }) => rest);
-
+		const lowerPrefix = textBeforeCursor.slice(1).toLowerCase();
+		const matches = this.#matchCommandNames(this.#commands, lowerPrefix);
 		if (matches.length === 0) return null;
 		return { items: matches, prefix: textBeforeCursor };
 	}

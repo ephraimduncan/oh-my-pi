@@ -103,26 +103,62 @@ class SyncSlashProvider implements AutocompleteProvider {
 }
 
 describe("Editor Enter handler sync slash completion", () => {
-	it("does not trigger slash autocomplete after prior prompt text", async () => {
+	it("triggers inline slash autocomplete after prior prompt text", async () => {
 		let suggestionCalls = 0;
 		const editor = new Editor(defaultEditorTheme);
 		editor.setAutocompleteProvider({
 			async getSuggestions(lines, cursorLine, cursorCol) {
 				suggestionCalls += 1;
 				const currentLine = lines[cursorLine] ?? "";
-				return { prefix: currentLine.slice(0, cursorCol), items: [{ value: "model", label: "/model" }] };
+				const before = currentLine.slice(0, cursorCol);
+				return {
+					prefix: before.slice(before.lastIndexOf("/")),
+					items: [{ value: "skill:foo", label: "/skill:foo" }],
+				};
 			},
 			applyCompletion(lines, cursorLine, cursorCol) {
 				return { lines, cursorLine, cursorCol };
 			},
 		});
 
+		// A "/" on a fresh line after prior prose is a valid inline reference,
+		// so the dropdown now opens (it stayed closed before multi-skill support).
 		editor.setText("explain this\n");
 		editor.handleInput("/");
 		await Bun.sleep(0);
 
-		expect(suggestionCalls).toBe(0);
-		expect(editor.isShowingAutocomplete()).toBe(false);
+		expect(suggestionCalls).toBeGreaterThan(0);
+		expect(editor.isShowingAutocomplete()).toBe(true);
+	});
+
+	it("applies an inline slash completion on Enter without submitting", async () => {
+		const provider = new SyncSlashProvider();
+		provider.getSuggestions = async (lines, _cursorLine, cursorCol) => {
+			const line = lines[0] || "";
+			const before = line.slice(0, cursorCol);
+			const slash = before.lastIndexOf("/");
+			if (slash !== -1 && /(?:^|\s)\/[^\s/]*$/.test(before)) {
+				return { prefix: before.slice(slash), items: [{ value: "skill:foo", label: "/skill:foo" }] };
+			}
+			return null;
+		};
+		const editor = new Editor(defaultEditorTheme);
+		editor.setAutocompleteProvider(provider);
+		let submitted: string | null = null;
+		editor.onSubmit = text => {
+			submitted = text;
+		};
+
+		editor.setText("use ");
+		editor.handleInput("/skill:fo");
+		await Bun.sleep(0);
+		expect(editor.isShowingAutocomplete()).toBe(true);
+
+		// Enter on a mid-message reference applies the completion and keeps the
+		// editor open for more typing — it must NOT submit the message.
+		editor.handleInput("\r");
+		expect(submitted).toBeNull();
+		expect(editor.getText()).toContain("/skill:foo");
 	});
 
 	it("completes slash command synchronously before async resolves and submits", () => {

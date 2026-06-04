@@ -292,3 +292,59 @@ describe("trySyncSlashCompletion", () => {
 		expect(result!.items.map(i => i.value)).toEqual(["model"]);
 	});
 });
+
+describe("inline slash command completion", () => {
+	const commands = [
+		{ name: "skill:cleanup", description: "Cleanup skill", inlineEligible: true },
+		{ name: "skill:deploy", description: "Deploy skill", inlineEligible: true },
+		{ name: "clear", description: "Clear the screen" },
+	];
+
+	it("completes an inline skill reference after prose", async () => {
+		const provider = new CombinedAutocompleteProvider(commands, "/tmp");
+		const line = "use /skill:clea";
+		const result = await provider.getSuggestions([line], 0, line.length);
+		expect(result).not.toBeNull();
+		expect(result!.prefix).toBe("/skill:clea");
+		expect(result!.items.map(i => i.value)).toEqual(["skill:cleanup"]);
+	});
+
+	it("offers inline-eligible skills but not control commands mid-line", async () => {
+		const provider = new CombinedAutocompleteProvider(commands, "/tmp");
+		const line = "do /cle";
+		const result = await provider.getSuggestions([line], 0, line.length);
+		expect(result).not.toBeNull();
+		const values = result!.items.map(i => i.value);
+		expect(values).toContain("skill:cleanup");
+		expect(values).not.toContain("clear");
+	});
+
+	it("offers control commands for a leading slash token", async () => {
+		const provider = new CombinedAutocompleteProvider(commands, "/tmp");
+		const result = await provider.getSuggestions(["/cle"], 0, 4);
+		expect(result).not.toBeNull();
+		expect(result!.items.map(i => i.value)).toContain("clear");
+	});
+
+	it("does not treat an absolute-path token as an inline command", async () => {
+		const provider = new CombinedAutocompleteProvider(commands, "/tmp");
+		const line = "open /skill:cleanup/extra"; // inner slash → not a command token
+		const result = await provider.getSuggestions([line], 0, line.length);
+		expect(result?.items.some(i => i.value.startsWith("skill:")) ?? false).toBe(false);
+	});
+
+	it("replaces only the inline token and preserves the rest of the line", () => {
+		const provider = new CombinedAutocompleteProvider(commands, "/tmp");
+		const line = "use /skill:clea and /skill:deploy";
+		const cursorCol = "use /skill:clea".length;
+		const result = provider.applyCompletion(
+			[line],
+			0,
+			cursorCol,
+			{ value: "skill:cleanup", label: "skill:cleanup" },
+			"/skill:clea",
+		);
+		expect(result.lines[0]).toBe("use /skill:cleanup  and /skill:deploy");
+		expect(result.cursorCol).toBe("use /skill:cleanup ".length);
+	});
+});
