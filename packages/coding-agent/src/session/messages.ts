@@ -32,11 +32,22 @@ import { formatOutputNotice } from "../tools/output-meta";
 
 export const SKILL_PROMPT_MESSAGE_TYPE = "skill-prompt";
 
+/** One referenced skill in a (possibly multi-skill) skill-prompt message. */
+export interface SkillPromptRef {
+	name: string;
+	path: string;
+	lineCount: number;
+}
+
 export interface SkillPromptDetails {
 	name: string;
 	path: string;
 	args?: string;
 	lineCount: number;
+	/** When several skills are referenced inline in a single message, the full
+	 *  ordered list (including the primary skill described by name/path/lineCount).
+	 *  Absent for single-skill invocations, which rely on name/path/lineCount. */
+	skills?: SkillPromptRef[];
 	/** Internal: tag used by AgentSession to remove the pending-display chip
 	 *  from `#steeringMessages` / `#followUpMessages` when the agent consumes
 	 *  this message. Not surfaced to renderers; the `__` prefix signals

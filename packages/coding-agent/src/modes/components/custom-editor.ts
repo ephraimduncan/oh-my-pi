@@ -1,6 +1,7 @@
 import { Editor, type KeyId, matchesKey, parseKittySequence } from "@oh-my-pi/pi-tui";
 import type { AppKeybinding } from "../../config/keybindings";
 import { highlightMagicKeywords } from "../magic-keywords";
+import { highlightSlashCommands } from "../slash-highlight";
 
 type ConfigurableEditorAction = Extract<
 	AppKeybinding,
@@ -47,9 +48,20 @@ const DEFAULT_ACTION_KEYS: Record<ConfigurableEditorAction, KeyId[]> = {
  * Custom editor that handles configurable app-level shortcuts for coding-agent.
  */
 export class CustomEditor extends Editor {
-	/** Gradient-highlight the "ultrathink" / "orchestrate" / "workflow" keywords as the user types
-	 *  them, skipping any occurrence inside code spans, fenced blocks, or XML sections. */
-	decorateText = (text: string): string => highlightMagicKeywords(text);
+	#slashCommandNames: ReadonlySet<string> = new Set();
+
+	/** Replace the set of recognized slash-command / skill names used to
+	 *  foreground-highlight `/command` and `/skill:name` references as the user
+	 *  types. Refreshed whenever the available commands change. */
+	setSlashCommandNames(names: ReadonlySet<string>): void {
+		this.#slashCommandNames = names;
+	}
+
+	/** Highlight recognized slash/skill references, then gradient-paint the
+	 *  "ultrathink" / "orchestrate" / "workflow" keywords as the user types them,
+	 *  skipping any occurrence inside code spans, fenced blocks, or XML sections. */
+	decorateText = (text: string): string =>
+		highlightSlashCommands(highlightMagicKeywords(text), this.#slashCommandNames);
 	onEscape?: () => void;
 	onClear?: () => void;
 	onExit?: () => void;

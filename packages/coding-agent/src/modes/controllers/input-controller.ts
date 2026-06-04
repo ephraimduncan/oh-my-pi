@@ -4,6 +4,7 @@ import type { AutocompleteProvider, SlashCommand } from "@oh-my-pi/pi-tui";
 import { $env, sanitizeText } from "@oh-my-pi/pi-utils";
 import { getRoleInfo } from "../../config/model-registry";
 import { isSettingsInitialized, settings } from "../../config/settings";
+import { buildSkillPromptMessage } from "../../extensibility/skills";
 import { renderSegmentTrack } from "../../modes/components/segment-track";
 import { TinyTitleDownloadProgressComponent } from "../../modes/components/tiny-title-download-progress";
 import { expandEmoticons } from "../../modes/emoji-autocomplete";
@@ -20,6 +21,19 @@ import { getEditorCommand, openInEditor } from "../../utils/external-editor";
 import { ensureSupportedImageInput } from "../../utils/image-loading";
 import { resizeImage } from "../../utils/image-resize";
 import { generateSessionTitle, setSessionTerminalTitle } from "../../utils/title-generator";
+
+interface SkillReference {
+	/** Full command name including the `skill:` prefix (e.g. `skill:computer-use`). */
+	commandName: string;
+	/** Bare skill name without the `skill:` prefix. */
+	name: string;
+	/** Absolute path to the skill file. */
+	path: string;
+	/** Offset of the leading "/" in the source text. */
+	start: number;
+	/** Offset just past the reference token in the source text. */
+	end: number;
+}
 
 interface Expandable {
 	setExpanded(expanded: boolean): void;
@@ -295,7 +309,7 @@ export class InputController {
 			// free-text Enter semantics applied a few lines below at the streaming
 			// branch). Ctrl+Enter routes through `handleFollowUp` and dispatches the
 			// same helper with `"followUp"`.
-			if (await this.#invokeSkillCommand(text, "steer")) {
+			if (await this.#invokeSkillCommands(text, "steer")) {
 				return;
 			}
 
@@ -459,47 +473,99 @@ export class InputController {
 	}
 
 	/**
-	 * Dispatch a `/skill:<name> [args]` invocation through `promptCustomMessage`
-	 * using the supplied `streamingBehavior`. Returns true if the text was a
-	 * recognised skill command and was dispatched. A failure to load the skill
-	 * file is surfaced via `showError` but still returns true — the editor was
-	 * already cleared on the success path, so falling through to plain-text
-	 * handling at that point would double-submit. Returns false when the text
-	 * isn't a `/skill:` prefix or the command name isn't a registered skill,
-	 * so the caller can fall through to plain-text handling (this branch
-	 * leaves the editor state untouched). `streamingBehavior` is only consulted
-	 * while the agent is streaming; the idle path of `promptCustomMessage`
-	 * ignores it.
+	 * Detect every token-boundary `/skill:<name>` reference in `text` whose name
+	 * is a registered skill command. References may appear anywhere in the message
+	 * (start of line or after whitespace); absolute paths and unknown names are
+	 * ignored. Returned in first-occurrence order with source offsets.
 	 */
-	async #invokeSkillCommand(text: string, streamingBehavior: "steer" | "followUp"): Promise<boolean> {
-		if (!text.startsWith("/skill:")) return false;
-		const spaceIndex = text.indexOf(" ");
-		const commandName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
-		const args = spaceIndex === -1 ? "" : text.slice(spaceIndex + 1).trim();
-		const skillPath = this.ctx.skillCommands?.get(commandName);
-		if (!skillPath) return false;
+	#collectSkillReferences(text: string): SkillReference[] {
+		const refs: SkillReference[] = [];
+		const re = /(?<!\S)\/(skill:[A-Za-z0-9](?:[\w.-]*[A-Za-z0-9])?)/g;
+		for (const m of text.matchAll(re)) {
+			const commandName = m[1]!;
+			const path = this.ctx.skillCommands?.get(commandName);
+			if (!path) continue;
+			const start = m.index ?? 0;
+			refs.push({
+				commandName,
+				name: commandName.slice("skill:".length) || commandName,
+				path,
+				start,
+				end: start + m[0].length,
+			});
+		}
+		return refs;
+	}
+
+	/**
+	 * The classic single-skill invocation that owns the whole message:
+	 * `/skill:<name> [args]` with nothing but whitespace before it. Everything
+	 * after the token is the skill's arguments. Returns null for any inline or
+	 * multi-reference case so the caller composes a combined prompt instead.
+	 */
+	#leadingSkillArgs(text: string, refs: SkillReference[]): { ref: SkillReference; args: string } | null {
+		if (refs.length !== 1) return null;
+		const ref = refs[0]!;
+		if (text.slice(0, ref.start).trim() !== "") return null;
+		return { ref, args: text.slice(ref.end).trim() };
+	}
+
+	/**
+	 * Build the skill-prompt CustomMessage for `refs`. A single leading reference
+	 * keeps the existing single-skill format (args supported). One or more inline
+	 * references load every (deduped) referenced skill and preserve the user's full
+	 * prose as the trailing instruction; `details.skills` lists them all for the chip.
+	 */
+	async #buildSkillInvocation(
+		text: string,
+		refs: SkillReference[],
+	): Promise<{ message: string; details: SkillPromptDetails }> {
+		const leading = this.#leadingSkillArgs(text, refs);
+		if (leading) {
+			return buildSkillPromptMessage({ name: leading.ref.name, filePath: leading.ref.path }, leading.args);
+		}
+		const seen = new Set<string>();
+		const unique: SkillReference[] = [];
+		for (const ref of refs) {
+			if (seen.has(ref.commandName)) continue;
+			seen.add(ref.commandName);
+			unique.push(ref);
+		}
+		const built = await Promise.all(
+			unique.map(ref => buildSkillPromptMessage({ name: ref.name, filePath: ref.path }, "")),
+		);
+		const message = `${built.map(b => b.message).join("\n\n")}\n\n---\n\nUser: ${text.trim()}`;
+		const details: SkillPromptDetails = {
+			name: built[0]!.details.name,
+			path: built[0]!.details.path,
+			lineCount: built[0]!.details.lineCount,
+			skills: built.map(b => ({ name: b.details.name, path: b.details.path, lineCount: b.details.lineCount })),
+		};
+		return { message, details };
+	}
+
+	/**
+	 * Dispatch every recognised `/skill:<name>` reference in `text` through
+	 * `promptCustomMessage` using the supplied `streamingBehavior`. Returns true
+	 * when at least one registered skill reference was found and dispatched (a
+	 * failure to load is surfaced via `showError` but still returns true — the
+	 * editor was already cleared, so falling through would double-submit). Returns
+	 * false when the text contains no recognised skill reference, so the caller
+	 * falls through to plain-text handling with the editor untouched.
+	 * `streamingBehavior` is only consulted while the agent is streaming.
+	 */
+	async #invokeSkillCommands(text: string, streamingBehavior: "steer" | "followUp"): Promise<boolean> {
+		if (!text.includes("/skill:")) return false;
+		const refs = this.#collectSkillReferences(text);
+		if (refs.length === 0) return false;
 		this.ctx.editor.addToHistory(text);
 		this.ctx.editor.setText("");
 		try {
-			const content = await Bun.file(skillPath).text();
-			const body = content.replace(/^---\n[\s\S]*?\n---\n/, "").trim();
-			const metaLines = [`Skill: ${skillPath}`];
-			if (args) {
-				metaLines.push(`User: ${args}`);
-			}
-			const message = `${body}\n\n---\n\n${metaLines.join("\n")}`;
-			const skillName = commandName.slice("skill:".length);
-			const details: SkillPromptDetails = {
-				name: skillName || commandName,
-				path: skillPath,
-				args: args || undefined,
-				lineCount: body ? body.split("\n").length : 0,
-			};
-			// When the agent is streaming, register the compact slash-form text as
-			// the pending-display twin BEFORE dispatching the CustomMessage. The
-			// returned tag is embedded in details so AgentSession.#handleAgentEvent
-			// can remove the matching display entry when the agent consumes this
-			// message (mirrors the user-message dequeue path).
+			const { message, details } = await this.#buildSkillInvocation(text, refs);
+			// When the agent is streaming, register the compact typed text as the
+			// pending-display twin BEFORE dispatching the CustomMessage so
+			// AgentSession.#handleAgentEvent can remove the matching display entry
+			// when the agent consumes this message (mirrors the user-message path).
 			if (this.ctx.session.isStreaming) {
 				const tag = this.ctx.session.enqueueCustomMessageDisplay(text, streamingBehavior);
 				details.__pendingDisplayTag = tag;
@@ -543,7 +609,7 @@ export class InputController {
 		// Skill commands invoke through the custom-message path regardless of
 		// which keybinding submitted them. Enter routes them as `steer`;
 		// Ctrl+Enter (this handler) routes them as `followUp`.
-		if (await this.#invokeSkillCommand(text, "followUp")) {
+		if (await this.#invokeSkillCommands(text, "followUp")) {
 			return;
 		}
 

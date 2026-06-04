@@ -104,7 +104,7 @@ function createStubInputControllerContext(opts: { skillCommands: Map<string, str
 	return { ctx, editor, enqueueCustomMessageDisplay, promptCustomMessage };
 }
 
-describe("InputController #invokeSkillCommand (E1-E3)", () => {
+describe("InputController #invokeSkillCommands (E1-E3)", () => {
 	let tempDir: TempDir;
 	let skillCommands: Map<string, string>;
 
@@ -185,6 +185,99 @@ describe("InputController #invokeSkillCommand (E1-E3)", () => {
 		}
 		const messageArg = firstCall[0];
 		expect(messageArg.details.__pendingDisplayTag).toBeUndefined();
+	});
+});
+
+describe("InputController multi-skill references", () => {
+	let tempDir: TempDir;
+	let skillCommands: Map<string, string>;
+
+	beforeEach(() => {
+		tempDir = TempDir.createSync("@pi-skill-multi-");
+		const alpha = writeSkillFile(tempDir.path(), "alpha", "Alpha body.");
+		const beta = writeSkillFile(tempDir.path(), "beta", "Beta body.");
+		skillCommands = new Map<string, string>([
+			["skill:alpha", alpha],
+			["skill:beta", beta],
+		]);
+	});
+
+	afterEach(() => {
+		tempDir.removeSync();
+		vi.restoreAllMocks();
+	});
+
+	it("loads every referenced skill and preserves prose for multiple inline references", async () => {
+		const { ctx, editor, promptCustomMessage } = createStubInputControllerContext({
+			skillCommands,
+			isStreaming: false,
+		});
+		const controller = new InputController(ctx);
+		controller.setupEditorSubmitHandler();
+		const text = "use /skill:alpha then /skill:beta to finish";
+		editor.setText(text);
+		await editor.onSubmit?.(text);
+
+		expect(promptCustomMessage).toHaveBeenCalledTimes(1);
+		const messageArg = promptCustomMessage.mock.calls[0]![0] as unknown as {
+			content: string;
+			details: SkillPromptDetails;
+		};
+		expect(messageArg.content).toContain("Alpha body.");
+		expect(messageArg.content).toContain("Beta body.");
+		expect(messageArg.content).toContain(`User: ${text}`);
+		expect(messageArg.details.skills?.map(s => s.name)).toEqual(["alpha", "beta"]);
+	});
+
+	it("loads a single skill referenced inline within prose", async () => {
+		const { ctx, editor, promptCustomMessage } = createStubInputControllerContext({
+			skillCommands,
+			isStreaming: false,
+		});
+		const controller = new InputController(ctx);
+		controller.setupEditorSubmitHandler();
+		const text = "please run /skill:beta carefully";
+		editor.setText(text);
+		await editor.onSubmit?.(text);
+
+		expect(promptCustomMessage).toHaveBeenCalledTimes(1);
+		const messageArg = promptCustomMessage.mock.calls[0]![0] as unknown as {
+			content: string;
+			details: SkillPromptDetails;
+		};
+		expect(messageArg.content).toContain("Beta body.");
+		expect(messageArg.content).toContain(`User: ${text}`);
+		expect(messageArg.details.skills?.map(s => s.name)).toEqual(["beta"]);
+	});
+
+	it("keeps single-skill args and omits the multi-skill list for a leading invocation", async () => {
+		const { ctx, editor, promptCustomMessage } = createStubInputControllerContext({
+			skillCommands,
+			isStreaming: false,
+		});
+		const controller = new InputController(ctx);
+		controller.setupEditorSubmitHandler();
+		editor.setText("/skill:alpha do the thing");
+		await editor.onSubmit?.("/skill:alpha do the thing");
+
+		const messageArg = promptCustomMessage.mock.calls[0]![0] as unknown as { details: SkillPromptDetails };
+		expect(messageArg.details.args).toBe("do the thing");
+		expect(messageArg.details.skills).toBeUndefined();
+	});
+
+	it("ignores unknown skill references and falls through when none are registered", async () => {
+		const { ctx, editor, promptCustomMessage } = createStubInputControllerContext({
+			skillCommands: new Map<string, string>(),
+			isStreaming: false,
+		});
+		// No `onInputCallback`/title machinery on the stub, so a fall-through to the
+		// normal-message path would throw — assert it does, proving the unknown
+		// `/skill:` ref was NOT consumed as a skill invocation.
+		const controller = new InputController(ctx);
+		controller.setupEditorSubmitHandler();
+		editor.setText("use /skill:ghost now");
+		await expect(editor.onSubmit?.("use /skill:ghost now")).rejects.toBeDefined();
+		expect(promptCustomMessage).not.toHaveBeenCalled();
 	});
 });
 

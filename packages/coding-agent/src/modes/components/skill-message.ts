@@ -39,18 +39,29 @@ export class SkillMessageComponent extends Container {
 		this.addChild(this.#box);
 		this.#box.clear();
 
-		const label = theme.fg("customMessageLabel", theme.bold("[skill]"));
+		const details = this.message.details;
+		const args = details?.args?.trim();
+		const skills = details?.skills;
+		const isMulti = (skills?.length ?? 0) > 1;
+
+		const label = theme.fg("customMessageLabel", theme.bold(isMulti ? "[skills]" : "[skill]"));
 		this.#box.addChild(new Text(label, 0, 0));
 		this.#box.addChild(new Spacer(1));
 
-		const details = this.message.details;
-		const args = details?.args?.trim();
-		const infoLines = [
-			`Skill: ${details?.name ?? "unknown"}`,
-			args ? `Args: ${args}` : undefined,
-			details?.path ? `Path: ${details.path}` : undefined,
-			typeof details?.lineCount === "number" ? `Prompt: ${details.lineCount} lines` : undefined,
-		].filter((line): line is string => Boolean(line));
+		const infoLines = (
+			skills && skills.length > 1
+				? [
+						`Skills: ${skills.map(s => s.name).join(", ")}`,
+						args ? `Args: ${args}` : undefined,
+						`Prompt: ${skills.reduce((sum, s) => sum + s.lineCount, 0)} lines`,
+					]
+				: [
+						`Skill: ${details?.name ?? "unknown"}`,
+						args ? `Args: ${args}` : undefined,
+						details?.path ? `Path: ${details.path}` : undefined,
+						typeof details?.lineCount === "number" ? `Prompt: ${details.lineCount} lines` : undefined,
+					]
+		).filter((line): line is string => Boolean(line));
 
 		this.#box.addChild(
 			new Markdown(infoLines.join("\n"), 0, 0, getMarkdownTheme(), {

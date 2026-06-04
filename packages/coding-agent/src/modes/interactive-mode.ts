@@ -457,7 +457,7 @@ export class InteractiveMode implements InteractiveModeContext {
 			for (const skill of this.session.skills) {
 				const commandName = `skill:${skill.name}`;
 				this.skillCommands.set(commandName, skill.filePath);
-				skillCommandList.push({ name: commandName, description: skill.description });
+				skillCommandList.push({ name: commandName, description: skill.description, inlineEligible: true });
 			}
 		}
 
@@ -665,11 +665,10 @@ export class InteractiveMode implements InteractiveModeContext {
 			name: cmd.name,
 			description: cmd.description,
 		}));
-		const autocompleteProvider = this.#inputController.createAutocompleteProvider(
-			[...this.#pendingSlashCommands, ...fileSlashCommands],
-			basePath,
-		);
+		const commands = [...this.#pendingSlashCommands, ...fileSlashCommands];
+		const autocompleteProvider = this.#inputController.createAutocompleteProvider(commands, basePath);
 		this.editor.setAutocompleteProvider(autocompleteProvider);
+		this.editor.setSlashCommandNames(new Set(commands.map(cmd => cmd.name)));
 		this.session.setSlashCommands(fileCommands);
 	}
 
