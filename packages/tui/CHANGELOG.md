@@ -6,6 +6,12 @@
 
 - Added inline slash-command completion. `CombinedAutocompleteProvider` and `Editor` now complete `/command` tokens at any whitespace boundary, not only the leading token, gated by a new optional `SlashCommand.inlineEligible` flag so hosts can offer several inline command/skill references in one message. Absolute-path completion and leading-command behavior are unchanged; completing an inline reference applies the token without submitting the message. ([#1858](https://github.com/can1357/oh-my-pi/pull/1858) by [@ephraimduncan](https://github.com/ephraimduncan))
 
+## [15.9.1] - 2026-06-04
+
+### Fixed
+
+- Fixed the OSC 11 appearance poll re-querying every 2s forever on terminals that support Mode 2031 but never change theme, whose repeated OSC 11/DA1 writes cleared the user's active text selection (breaking copy every 2 seconds). The poll now stops as soon as DECRQM confirms Mode 2031 support, since push notifications make polling redundant.
+
 ## [15.9.0] - 2026-06-04
 
 ### Added
