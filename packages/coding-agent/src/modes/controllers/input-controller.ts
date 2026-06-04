@@ -8,6 +8,7 @@ import { buildSkillPromptMessage } from "../../extensibility/skills";
 import { renderSegmentTrack } from "../../modes/components/segment-track";
 import { TinyTitleDownloadProgressComponent } from "../../modes/components/tiny-title-download-progress";
 import { expandEmoticons } from "../../modes/emoji-autocomplete";
+import { maskNonProse } from "../../modes/markdown-prose";
 import { createPromptActionAutocompleteProvider } from "../../modes/prompt-action-autocomplete";
 import type { InteractiveModeContext } from "../../modes/types";
 import type { AgentSessionEvent } from "../../session/agent-session";
@@ -474,16 +475,28 @@ export class InputController {
 
 	/**
 	 * Detect every token-boundary `/skill:<name>` reference in `text` whose name
-	 * is a registered skill command. References may appear anywhere in the message
-	 * (start of line or after whitespace); absolute paths and unknown names are
-	 * ignored. Returned in first-occurrence order with source offsets.
+	 * is a registered skill command. The scan runs against a code/markup-masked
+	 * copy (via {@link maskNonProse}) so `/skill:` inside inline code spans, fenced
+	 * blocks, or XML sections is left as literal text — matching the editor
+	 * highlighter and autocomplete, so dispatch never consumes a pasted example.
+	 * The token is taken up to the next whitespace and resolved verbatim against
+	 * the skill map (so names like `_review` or `foo_` are accepted); trailing
+	 * punctuation that is not part of a registered name is trimmed back until the
+	 * map matches. Returned in first-occurrence order with source offsets.
 	 */
 	#collectSkillReferences(text: string): SkillReference[] {
 		const refs: SkillReference[] = [];
-		const re = /(?<!\S)\/(skill:[A-Za-z0-9](?:[\w.-]*[A-Za-z0-9])?)/g;
-		for (const m of text.matchAll(re)) {
-			const commandName = m[1]!;
-			const path = this.ctx.skillCommands?.get(commandName);
+		// Indices into the masked copy still address `text` (same length); prose
+		// regions are byte-identical, so the captured token equals the original.
+		const masked = maskNonProse(text);
+		const re = /(?<!\S)\/(skill:\S+)/g;
+		for (const m of masked.matchAll(re)) {
+			let commandName = m[1]!;
+			let path = this.ctx.skillCommands?.get(commandName);
+			while (!path && commandName.length > "skill:".length && /[^A-Za-z0-9]$/.test(commandName)) {
+				commandName = commandName.slice(0, -1);
+				path = this.ctx.skillCommands?.get(commandName);
+			}
 			if (!path) continue;
 			const start = m.index ?? 0;
 			refs.push({
@@ -491,7 +504,7 @@ export class InputController {
 				name: commandName.slice("skill:".length) || commandName,
 				path,
 				start,
-				end: start + m[0].length,
+				end: start + 1 + commandName.length, // "/" + the (possibly trimmed) command name
 			});
 		}
 		return refs;

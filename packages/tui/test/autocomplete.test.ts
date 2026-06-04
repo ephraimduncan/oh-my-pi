@@ -332,6 +332,23 @@ describe("inline slash command completion", () => {
 		const result = await provider.getSuggestions([line], 0, line.length);
 		expect(result?.items.some(i => i.value.startsWith("skill:")) ?? false).toBe(false);
 	});
+	it("treats a slash on a later line of a multi-line prompt as inline (no control commands)", async () => {
+		const provider = new CombinedAutocompleteProvider(commands, "/tmp");
+		// `/cle` on line 2 is NOT the leading command — earlier line has prose.
+		const result = await provider.getSuggestions(["explain this", "/cle"], 1, "/cle".length);
+		expect(result).not.toBeNull();
+		const values = result!.items.map(i => i.value);
+		expect(values).toContain("skill:cleanup");
+		expect(values).not.toContain("clear");
+	});
+
+	it("treats a leading slash after blank lines as the leading command", async () => {
+		const provider = new CombinedAutocompleteProvider(commands, "/tmp");
+		// Only blank lines precede `/cle`, so the full command pool applies.
+		const result = await provider.getSuggestions(["", "/cle"], 1, "/cle".length);
+		expect(result).not.toBeNull();
+		expect(result!.items.map(i => i.value)).toContain("clear");
+	});
 
 	it("replaces only the inline token and preserves the rest of the line", () => {
 		const provider = new CombinedAutocompleteProvider(commands, "/tmp");

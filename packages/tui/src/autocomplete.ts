@@ -60,12 +60,13 @@ function isTokenStart(text: string, index: number): boolean {
  * Locate the slash-command token ending at the cursor. A slash token begins at
  * the start of the line or immediately after whitespace, starts with "/", and
  * contains no inner "/" or whitespace — so absolute paths (`/bin/sh`) and
- * argument text are excluded. `isLeading` is true when only whitespace precedes
- * the token (a leading command); false for an inline reference further along
- * the line. Returns null when the text before the cursor is not such a token.
- * MUST stay in sync with the editor's inline-slash trigger grammar.
+ * argument text are excluded. `atLineStart` is true when only whitespace precedes
+ * the token *on the current line*; whether the token is the leading command of
+ * the whole message also depends on the earlier lines (decided by the caller).
+ * Returns null when the text before the cursor is not such a token. MUST stay in
+ * sync with the editor's inline-slash trigger grammar.
  */
-function findSlashCommandToken(textBeforeCursor: string): { token: string; isLeading: boolean } | null {
+function findSlashCommandToken(textBeforeCursor: string): { token: string; atLineStart: boolean } | null {
 	let start = textBeforeCursor.length;
 	while (start > 0 && !/\s/.test(textBeforeCursor[start - 1] ?? "")) {
 		start -= 1;
@@ -73,8 +74,8 @@ function findSlashCommandToken(textBeforeCursor: string): { token: string; isLea
 	const token = textBeforeCursor.slice(start);
 	if (!token.startsWith("/")) return null;
 	if (token.indexOf("/", 1) !== -1) return null;
-	const isLeading = textBeforeCursor.slice(0, start).trim() === "";
-	return { token, isLeading };
+	const atLineStart = textBeforeCursor.slice(0, start).trim() === "";
+	return { token, atLineStart };
 }
 
 function extractQuotedPrefix(text: string): string | null {
@@ -301,8 +302,14 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 		// leading-only and absolute paths are never shadowed.
 		const slashToken = findSlashCommandToken(textBeforeCursor);
 		if (slashToken) {
+			// A token is the *leading* command of the message only when it starts
+			// the current line AND every earlier line is blank — otherwise it is an
+			// inline reference (e.g. a `/` on line 2 of a multi-line prompt), which
+			// is restricted to `inlineEligible` commands.
+			const priorLinesBlank = lines.slice(0, cursorLine).every(line => line.trim() === "");
+			const isLeading = slashToken.atLineStart && priorLinesBlank;
 			const lowerPrefix = slashToken.token.slice(1).toLowerCase();
-			const pool = slashToken.isLeading
+			const pool = isLeading
 				? this.#commands
 				: this.#commands.filter(cmd => "inlineEligible" in cmd && cmd.inlineEligible);
 			const matches = this.#matchCommandNames(pool, lowerPrefix);

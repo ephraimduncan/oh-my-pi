@@ -196,15 +196,89 @@ describe("InputController multi-skill references", () => {
 		tempDir = TempDir.createSync("@pi-skill-multi-");
 		const alpha = writeSkillFile(tempDir.path(), "alpha", "Alpha body.");
 		const beta = writeSkillFile(tempDir.path(), "beta", "Beta body.");
+		const review = writeSkillFile(tempDir.path(), "_review", "Review body.");
 		skillCommands = new Map<string, string>([
 			["skill:alpha", alpha],
 			["skill:beta", beta],
+			["skill:_review", review],
 		]);
 	});
 
 	afterEach(() => {
 		tempDir.removeSync();
 		vi.restoreAllMocks();
+	});
+
+	it("loads a skill whose name is not alphanumeric-bounded (e.g. _review)", async () => {
+		const { ctx, editor, promptCustomMessage } = createStubInputControllerContext({
+			skillCommands,
+			isStreaming: false,
+		});
+		const controller = new InputController(ctx);
+		controller.setupEditorSubmitHandler();
+		editor.setText("/skill:_review");
+		await editor.onSubmit?.("/skill:_review");
+
+		expect(promptCustomMessage).toHaveBeenCalledTimes(1);
+		const messageArg = promptCustomMessage.mock.calls[0]![0] as unknown as {
+			content: string;
+			details: SkillPromptDetails;
+		};
+		expect(messageArg.content).toContain("Review body.");
+		expect(messageArg.details.name).toBe("_review");
+	});
+
+	it("trims trailing punctuation around inline references", async () => {
+		const { ctx, editor, promptCustomMessage } = createStubInputControllerContext({
+			skillCommands,
+			isStreaming: false,
+		});
+		const controller = new InputController(ctx);
+		controller.setupEditorSubmitHandler();
+		const text = "use /skill:alpha, and /skill:beta.";
+		editor.setText(text);
+		await editor.onSubmit?.(text);
+
+		const messageArg = promptCustomMessage.mock.calls[0]![0] as unknown as { details: SkillPromptDetails };
+		expect(messageArg.details.skills?.map(s => s.name)).toEqual(["alpha", "beta"]);
+	});
+
+	it("does not consume a /skill: reference inside a fenced code block", async () => {
+		const { ctx, editor, promptCustomMessage } = createStubInputControllerContext({
+			skillCommands,
+			isStreaming: false,
+		});
+		// Only a fenced code block — no prose reference — so #invokeSkillCommands
+		// returns false and the message falls through to the normal-submit path.
+		// The minimal stub can't service that path, so it rejects; crucially no
+		// skill was dispatched.
+		const controller = new InputController(ctx);
+		controller.setupEditorSubmitHandler();
+		const text = "```\n/skill:alpha\n```";
+		editor.setText(text);
+		await expect(editor.onSubmit?.(text)).rejects.toBeDefined();
+		expect(promptCustomMessage).not.toHaveBeenCalled();
+	});
+
+	it("loads prose references but ignores ones inside code blocks", async () => {
+		const { ctx, editor, promptCustomMessage } = createStubInputControllerContext({
+			skillCommands,
+			isStreaming: false,
+		});
+		const controller = new InputController(ctx);
+		controller.setupEditorSubmitHandler();
+		const text = "run /skill:alpha\n```\n/skill:beta\n```";
+		editor.setText(text);
+		await editor.onSubmit?.(text);
+
+		expect(promptCustomMessage).toHaveBeenCalledTimes(1);
+		const messageArg = promptCustomMessage.mock.calls[0]![0] as unknown as {
+			content: string;
+			details: SkillPromptDetails;
+		};
+		expect(messageArg.details.skills?.map(s => s.name)).toEqual(["alpha"]);
+		expect(messageArg.content).toContain("Alpha body.");
+		expect(messageArg.content).not.toContain("Beta body.");
 	});
 
 	it("loads every referenced skill and preserves prose for multiple inline references", async () => {
