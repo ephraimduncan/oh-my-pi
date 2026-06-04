@@ -784,16 +784,29 @@ export async function runRootCommand(
 		process.exit(1);
 	}
 
-	// `--worktree` / `-w`: create an isolated git worktree and enter it before any
-	// settings, plugin, or session work, so everything downstream is scoped to the
-	// worktree. Placed after the early-exit flags and the cheap input validation
-	// above (version/list-models/export, RPC `@file`) so an invalid invocation never
-	// leaves a junk worktree/branch behind. No cache clearing is needed (unlike the
-	// resume cross-project switch below) because nothing cwd-derived has loaded yet.
+	// `--worktree` / `-w`: run this session inside an isolated workspace using the
+	// user's configured isolation backend — the same `task.isolation.mode` PAL
+	// primitive subagent tasks use — and enter it before any settings, plugin, or
+	// session work so everything downstream is scoped to it. Placed after the
+	// early-exit flags and the cheap input validation above (version/list-models/
+	// export, RPC `@file`) so an invalid invocation never materialises a workspace.
 	if (parsedArgs.worktree !== undefined) {
+		const baseCwd = getProjectDir();
+		// Settings carry the chosen backend. Settings.init is memoised, so the
+		// init later in startup reuses this instance (re-scoped to the workspace).
+		const startupSettings =
+			deps.settings ?? (await logger.time("settings:init:worktree", Settings.init, { cwd: baseCwd }));
 		try {
-			const worktree = await logger.time("createWorktree", createWorktree, getProjectDir(), parsedArgs.worktree);
-			setProjectDir(worktree.worktreePath);
+			const worktree = await logger.time(
+				"createWorktree",
+				createWorktree,
+				baseCwd,
+				parsedArgs.worktree,
+				startupSettings.get("task.isolation.mode"),
+			);
+			setProjectDir(worktree.workspacePath);
+			// Re-scope project settings (.omp/.claude config) to the workspace copy.
+			await startupSettings.reloadForCwd(getProjectDir());
 		} catch (error: unknown) {
 			const message = error instanceof Error ? error.message : "Failed to create worktree";
 			process.stderr.write(`${chalk.red(`Error: ${message}`)}\n`);

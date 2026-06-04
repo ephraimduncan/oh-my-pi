@@ -5,7 +5,7 @@
 ### Added
 
 - Added a bundled TypeScript rule that warns against leaving `@deprecated` compatibility shims behind instead of finishing a refactor.
-- Added a top-level `--worktree` / `-w` flag that creates an isolated git worktree under `<repo>/.omp/worktrees/<name>` on a fresh `worktree-<name>` branch (based on the current `HEAD`) and starts the session inside it, mirroring Claude Code's `--worktree`. The name is optional — omit it for an auto-generated one (e.g. `swift-falcon`), and reused names get a `-2`/`-3` suffix. Pull-request refs (`#123`) are redirected to `omp gh pr_checkout` ([#452](https://github.com/can1357/oh-my-pi/issues/452)).
+- Added a top-level `--worktree` / `-w` flag that runs the session inside an isolated workspace, reusing the same user-chosen isolation primitive as subagent tasks: the `task.isolation.mode` setting drives the native PAL (CoW clone, overlay, or recursive copy under `~/.omp/wt/`). The session enters the workspace before any settings, plugin, or session work, so every file and shell tool is scoped to it without touching the active checkout. The name is optional — omit it for an auto-generated one (e.g. `swift-falcon`). The workspace is persistent: it is left in place on exit for manual inspection, merge, and cleanup (`rm -rf <path>`). Pull-request refs (`#123`) are redirected to `omp gh pr_checkout` ([#452](https://github.com/can1357/oh-my-pi/issues/452)).
 
 ### Fixed
 

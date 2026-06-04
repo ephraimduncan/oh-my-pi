@@ -1119,14 +1119,10 @@ export const worktree = {
 		cwd: string,
 		worktreePath: string,
 		refName: string,
-		options: { detach?: boolean; createBranch?: string; signal?: AbortSignal } = {},
+		options: { detach?: boolean; signal?: AbortSignal } = {},
 	): Promise<void> {
 		const args = ["worktree", "add"];
 		if (options.detach) args.push("--detach");
-		// `-b <branch>` creates the branch from `refName` and checks it out in the
-		// new worktree as a single atomic command, so a failure never leaves a
-		// dangling branch behind (unlike branch.create + worktree.add).
-		if (options.createBranch) args.push("-b", options.createBranch);
 		args.push(worktreePath, refName);
 		await runEffect(cwd, args, { signal: options.signal });
 	},
@@ -1162,15 +1158,6 @@ export const worktree = {
 		await runEffect(cwd, ["worktree", "prune"], { signal });
 	},
 };
-
-/**
- * Return true when `pathspec` is ignored by git (matches a `.gitignore` rule).
- * Uses `git check-ignore -q`, which exits 0 on a match and 1 otherwise.
- */
-export async function checkIgnore(cwd: string, pathspec: string, signal?: AbortSignal): Promise<boolean> {
-	const result = await git(cwd, ["check-ignore", "-q", "--", pathspec], { readOnly: true, signal });
-	return result.exitCode === 0;
-}
 
 // ════════════════════════════════════════════════════════════════════════════
 // API: patch

@@ -71,7 +71,7 @@ export default class Index extends Command {
 		worktree: Flags.string({
 			char: "w",
 			description:
-				"Create an isolated git worktree under .omp/worktrees and start the session in it (name optional)",
+				"Run the session in an isolated workspace using your configured isolation backend (task.isolation.mode); name optional",
 		}),
 		"session-dir": Flags.string({
 			description: "Directory for session storage and lookup",

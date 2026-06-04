@@ -2597,7 +2597,7 @@ export const SETTINGS_SCHEMA = {
 			tab: "tasks",
 			label: "Isolation Mode",
 			description:
-				'Isolation backend for subagents. "auto" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs/ProjFS, then a git worktree / recursive-copy fallback).',
+				'Isolation backend for subagents and the `--worktree` session flag. "auto" lets the native PAL pick the best available backend (CoW-aware filesystems, then overlayfs/ProjFS, then a git worktree / recursive-copy fallback).',
 			options: [
 				{ value: "none", label: "None", description: "No isolation" },
 				{ value: "auto", label: "Auto", description: "Let the PAL pick the best available backend" },

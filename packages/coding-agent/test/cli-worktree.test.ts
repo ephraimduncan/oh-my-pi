@@ -2,9 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "bun:test";
 import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
+import * as natives from "@oh-my-pi/pi-natives";
 import { parseArgs } from "../src/cli/args";
 import { createWorktree, slugifyWorktreeName } from "../src/cli/worktree-create";
-import * as git from "../src/utils/git";
+import { parseIsolationMode } from "../src/task/worktree";
 
 describe("parseArgs — --worktree / -w", () => {
 	it("auto-generates a name when --worktree has no value (true)", () => {
@@ -76,8 +77,8 @@ describe("createWorktree (integration)", () => {
 
 	async function createGitRepo(): Promise<string> {
 		const repo = await fs.mkdtemp(path.join(os.tmpdir(), "omp-wt-create-"));
-		// Resolve symlinks (/var -> /private/var on macOS) so git's reported paths
-		// match the ones createWorktree derives from the same root.
+		// Resolve symlinks (/var -> /private/var on macOS) so git's reported repo
+		// root matches the one the PAL derives from the same directory.
 		const resolved = await fs.realpath(repo);
 		tempDirs.push(resolved);
 		await runGit(resolved, ["init"]);
@@ -90,81 +91,122 @@ describe("createWorktree (integration)", () => {
 	}
 
 	beforeEach(() => {
-		// Silence the creation report; the contract under test is the on-disk
-		// worktree + branch, not the human-readable summary.
+		// Silence the creation report; the contract under test is the returned
+		// handle and the backend the PAL was asked for, not the printed summary.
 		vi.spyOn(process.stdout, "write").mockReturnValue(true);
 	});
 
 	afterEach(async () => {
+		// isoStart is always mocked, so nothing is written under ~/.omp/wt.
 		vi.restoreAllMocks();
 		await Promise.all(tempDirs.splice(0).map(dir => fs.rm(dir, { recursive: true, force: true })));
 	});
 
-	it("creates a worktree on a worktree-<name> branch under <repo>/.../worktrees", async () => {
+	it("materialises an isolated workspace via the PAL under <wt>/<name>/merged", async () => {
 		const repo = await createGitRepo();
-		const created = await createWorktree(repo, "feature-auth");
+		const isoStart = vi.spyOn(natives, "isoStart").mockResolvedValue(undefined);
+		vi.spyOn(natives, "isoResolve").mockReturnValue({
+			kind: natives.IsoBackendKind.Rcopy,
+			candidates: [natives.IsoBackendKind.Rcopy],
+			fellBack: false,
+			reason: undefined,
+		});
+
+		const created = await createWorktree(repo, "feature-auth", "rcopy");
 
 		expect(created.name).toBe("feature-auth");
-		expect(created.branchName).toBe("worktree-feature-auth");
-		// Repo-local, in a `worktrees/` parent (config dir name is configurable).
-		expect(created.worktreePath.startsWith(repo)).toBe(true);
-		expect(path.basename(created.worktreePath)).toBe("feature-auth");
-		expect(path.basename(path.dirname(created.worktreePath))).toBe("worktrees");
-
-		const stat = await fs.stat(created.worktreePath);
-		expect(stat.isDirectory()).toBe(true);
-
-		const worktrees = await git.worktree.list(repo);
-		expect(worktrees.some(entry => path.resolve(entry.path) === path.resolve(created.worktreePath))).toBe(true);
-
-		const branches = await git.branch.list(repo);
-		expect(branches).toContain("worktree-feature-auth");
+		expect(created.backend).toBe(natives.IsoBackendKind.Rcopy);
+		expect(created.fellBack).toBe(false);
+		// The workspace is the PAL's merged view, keyed by the slug.
+		expect(path.basename(created.workspacePath)).toBe("merged");
+		expect(path.basename(path.dirname(created.workspacePath))).toMatch(/^feature-auth-[0-9a-f]+$/);
+		// isoStart got the resolved backend, the repo as the lower dir, and the
+		// merged path as the target.
+		expect(isoStart).toHaveBeenCalledTimes(1);
+		expect(isoStart).toHaveBeenCalledWith(natives.IsoBackendKind.Rcopy, expect.any(String), created.workspacePath);
 	});
 
-	it("slugifies an explicit name into a git-safe branch", async () => {
+	it("passes the user-chosen isolation mode to the PAL as the preferred backend", async () => {
 		const repo = await createGitRepo();
-		const created = await createWorktree(repo, "My Feature");
-		expect(created.name).toBe("my-feature");
-		expect(created.branchName).toBe("worktree-my-feature");
+		const isoResolve = vi.spyOn(natives, "isoResolve").mockReturnValue({
+			kind: natives.IsoBackendKind.Apfs,
+			candidates: [natives.IsoBackendKind.Apfs],
+			fellBack: false,
+			reason: undefined,
+		});
+		vi.spyOn(natives, "isoStart").mockResolvedValue(undefined);
+
+		await createWorktree(repo, "x", "apfs");
+
+		expect(isoResolve).toHaveBeenCalledWith(parseIsolationMode("apfs"));
+		expect(isoResolve).toHaveBeenCalledWith(natives.IsoBackendKind.Apfs);
 	});
 
-	it("auto-generates a slug name when none is given", async () => {
+	it("treats task.isolation.mode=none as an auto-resolve hint, not 'skip isolation'", async () => {
 		const repo = await createGitRepo();
-		const created = await createWorktree(repo, true);
+		const isoResolve = vi.spyOn(natives, "isoResolve").mockReturnValue({
+			kind: natives.IsoBackendKind.Rcopy,
+			candidates: [natives.IsoBackendKind.Rcopy],
+			fellBack: false,
+			reason: undefined,
+		});
+		vi.spyOn(natives, "isoStart").mockResolvedValue(undefined);
+
+		await createWorktree(repo, "x", "none");
+
+		// `none` -> parseIsolationMode -> undefined -> isoResolve(null): `-w` is an
+		// explicit opt-in, so it isolates even when subagent isolation is disabled.
+		expect(isoResolve).toHaveBeenCalledWith(null);
+	});
+
+	it("auto-generates a slug name when no name is given", async () => {
+		const repo = await createGitRepo();
+		vi.spyOn(natives, "isoResolve").mockReturnValue({
+			kind: natives.IsoBackendKind.Rcopy,
+			candidates: [natives.IsoBackendKind.Rcopy],
+			fellBack: false,
+			reason: undefined,
+		});
+		vi.spyOn(natives, "isoStart").mockResolvedValue(undefined);
+
+		const created = await createWorktree(repo, true, "auto");
+
 		expect(created.name).toMatch(/^[a-z0-9]+(?:-[a-z0-9]+)*$/);
-		expect(created.branchName).toBe(`worktree-${created.name}`);
-		const branches = await git.branch.list(repo);
-		expect(branches).toContain(created.branchName);
 	});
 
-	it("disambiguates the path and branch when a name is reused", async () => {
+	it("surfaces the PAL fallback when the requested backend is unavailable", async () => {
 		const repo = await createGitRepo();
-		const first = await createWorktree(repo, "dup");
-		const second = await createWorktree(repo, "dup");
-		expect(first.name).toBe("dup");
-		expect(second.name).toBe("dup-2");
-		expect(second.branchName).toBe("worktree-dup-2");
-		expect(second.worktreePath).not.toBe(first.worktreePath);
+		const unavailable = new Error("ISO_UNAVAILABLE: btrfs source is not a subvolume");
+		vi.spyOn(natives, "isoResolve").mockReturnValue({
+			kind: natives.IsoBackendKind.Btrfs,
+			candidates: [natives.IsoBackendKind.Btrfs, natives.IsoBackendKind.Rcopy],
+			fellBack: false,
+			reason: undefined,
+		});
+		vi.spyOn(natives, "isoStart").mockRejectedValueOnce(unavailable).mockResolvedValueOnce(undefined);
+		vi.spyOn(natives, "isoIsUnavailableError").mockImplementation(message => message.startsWith("ISO_UNAVAILABLE:"));
 
-		const branches = await git.branch.list(repo);
-		expect(branches).toContain("worktree-dup");
-		expect(branches).toContain("worktree-dup-2");
+		const created = await createWorktree(repo, "fallback", "btrfs");
+
+		expect(created.backend).toBe(natives.IsoBackendKind.Rcopy);
+		expect(created.fellBack).toBe(true);
+		expect(created.fallbackReason).toBe(unavailable.message);
 	});
 
 	it("rejects pull-request refs with a pointer to omp gh pr_checkout", async () => {
 		const repo = await createGitRepo();
-		await expect(createWorktree(repo, "#1234")).rejects.toThrow(/pr_checkout/);
+		await expect(createWorktree(repo, "#1234", "auto")).rejects.toThrow(/pr_checkout/);
 	});
 
 	it("throws when not inside a git repository", async () => {
 		const bare = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "omp-not-a-repo-")));
 		tempDirs.push(bare);
-		await expect(createWorktree(bare, "foo")).rejects.toThrow(/git repository/);
+		await expect(createWorktree(bare, "foo", "auto")).rejects.toThrow(/git repository/);
 	});
 
-	it("does not create a worktree when a worktree-independent validation rejects the invocation", async () => {
-		// Regression (PR #1773 review): the RPC `@file` check must run before
-		// createWorktree(), so an invalid invocation leaves no junk worktree/branch.
+	it("does not materialise a workspace when a worktree-independent validation rejects the invocation", async () => {
+		// Regression (PR #1773 review): the RPC `@file` check must run before the
+		// worktree side-effect, so an invalid invocation leaves no isolated workspace.
 		const repo = await createGitRepo();
 		const home = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "omp-wt-home-")));
 		tempDirs.push(home);
@@ -180,8 +222,7 @@ describe("createWorktree (integration)", () => {
 
 		expect(exitCode).toBe(1);
 		expect(stderr).toContain("@file arguments are not supported");
-		// The rejected invocation must not have created a worktree or branch.
-		await expect(fs.stat(path.join(repo, ".omp", "worktrees", "wtjunk"))).rejects.toThrow();
-		expect(await git.branch.list(repo)).not.toContain("worktree-wtjunk");
+		// No isolated workspace dir was created under the (temp) home.
+		await expect(fs.stat(path.join(home, ".omp", "wt"))).rejects.toThrow();
 	}, 20_000);
 });
