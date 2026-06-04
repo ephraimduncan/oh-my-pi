@@ -4,7 +4,7 @@
 
 ### Added
 
-- Added support for referencing multiple skills in a single message. Typing `/` anywhere in the prompt — not only as the first token — now opens the skill/command autocomplete, recognized `/skill:<name>` references are highlighted as you type, and on send every referenced skill is loaded with your surrounding prose preserved as the instruction. Builtin control commands (e.g. `/model`, `/clear`) stay leading-only since they take over the whole turn. (by [@ephraimduncan](https://github.com/ephraimduncan))
+- Added support for referencing multiple skills in a single message. Typing `/` anywhere in the prompt — not only as the first token — now opens the skill/command autocomplete, recognized `/skill:<name>` references are highlighted as you type, and on send every referenced skill is loaded with your surrounding prose preserved as the instruction. Builtin control commands (e.g. `/model`, `/clear`) stay leading-only since they take over the whole turn. ([#1858](https://github.com/can1357/oh-my-pi/pull/1858) by [@ephraimduncan](https://github.com/ephraimduncan))
 
 ## [15.9.0] - 2026-06-04
 
