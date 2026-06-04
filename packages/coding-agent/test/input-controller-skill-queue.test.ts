@@ -90,6 +90,7 @@ function createStubInputControllerContext(opts: { skillCommands: Map<string, str
 		},
 		showError,
 		updatePendingMessagesDisplay,
+		updateEditorBorderColor: () => {},
 		// Defaults that InputController touches on submit but don't matter here.
 		isBashMode: false,
 		isPythonMode: false,
@@ -258,6 +259,36 @@ describe("InputController multi-skill references", () => {
 		editor.setText(text);
 		await expect(editor.onSubmit?.(text)).rejects.toBeDefined();
 		expect(promptCustomMessage).not.toHaveBeenCalled();
+	});
+
+	it("does not hijack a /skill: reference inside a bash command", async () => {
+		const { ctx, editor, promptCustomMessage } = createStubInputControllerContext({
+			skillCommands,
+			isStreaming: false,
+		});
+		const handleBashCommand = vi.fn(async () => {});
+		(ctx as unknown as Record<string, unknown>).handleBashCommand = handleBashCommand;
+		const controller = new InputController(ctx);
+		controller.setupEditorSubmitHandler();
+		await editor.onSubmit?.("! echo /skill:alpha");
+
+		expect(promptCustomMessage).not.toHaveBeenCalled();
+		expect(handleBashCommand).toHaveBeenCalledWith("echo /skill:alpha", false);
+	});
+
+	it("does not hijack a /skill: reference inside a python command", async () => {
+		const { ctx, editor, promptCustomMessage } = createStubInputControllerContext({
+			skillCommands,
+			isStreaming: false,
+		});
+		const handlePythonCommand = vi.fn(async () => {});
+		(ctx as unknown as Record<string, unknown>).handlePythonCommand = handlePythonCommand;
+		const controller = new InputController(ctx);
+		controller.setupEditorSubmitHandler();
+		await editor.onSubmit?.("$ print('/skill:alpha')");
+
+		expect(promptCustomMessage).not.toHaveBeenCalled();
+		expect(handlePythonCommand).toHaveBeenCalledWith("print('/skill:alpha')", false);
 	});
 
 	it("loads prose references but ignores ones inside code blocks", async () => {

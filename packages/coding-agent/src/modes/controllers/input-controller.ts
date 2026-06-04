@@ -573,6 +573,11 @@ export class InputController {
 	 * `streamingBehavior` is only consulted while the agent is streaming.
 	 */
 	async #invokeSkillCommands(text: string, streamingBehavior: "steer" | "followUp"): Promise<boolean> {
+		// Explicit bash (`!`) and Python (`$`) command modes own the whole input and
+		// are handled after this call, so a `/skill:` token inside such a command
+		// (e.g. `! echo /skill:foo`, `$ print("/skill:foo")`) must not be hijacked as
+		// a skill reference. Mirror those handlers' `startsWith` checks.
+		if (text.startsWith("!") || text.startsWith("$")) return false;
 		if (!text.includes("/skill:")) return false;
 		const refs = this.#collectSkillReferences(text);
 		if (refs.length === 0) return false;
