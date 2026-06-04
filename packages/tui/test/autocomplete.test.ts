@@ -298,6 +298,7 @@ describe("inline slash command completion", () => {
 		{ name: "skill:cleanup", description: "Cleanup skill", inlineEligible: true },
 		{ name: "skill:deploy", description: "Deploy skill", inlineEligible: true },
 		{ name: "clear", description: "Clear the screen" },
+		{ name: "status", description: "Show status" },
 	];
 
 	it("completes an inline skill reference after prose", async () => {
@@ -309,14 +310,23 @@ describe("inline slash command completion", () => {
 		expect(result!.items.map(i => i.value)).toEqual(["skill:cleanup"]);
 	});
 
-	it("offers inline-eligible skills but not control commands mid-line", async () => {
+	it("offers inline-eligible skills (by name prefix) but not control commands mid-line", async () => {
 		const provider = new CombinedAutocompleteProvider(commands, "/tmp");
-		const line = "do /cle";
+		const line = "do /s"; // prefix of "skill:*" and of the non-inline "status"
 		const result = await provider.getSuggestions([line], 0, line.length);
 		expect(result).not.toBeNull();
 		const values = result!.items.map(i => i.value);
 		expect(values).toContain("skill:cleanup");
-		expect(values).not.toContain("clear");
+		expect(values).toContain("skill:deploy");
+		expect(values).not.toContain("status"); // matches the prefix but is not inlineEligible
+	});
+
+	it("matches inline tokens by name prefix, not fuzzily, so path-like tokens fall through", async () => {
+		const provider = new CombinedAutocompleteProvider(commands, "/tmp");
+		// "cl" fuzzily matches "skill:cleanup" but is not a name prefix and looks like
+		// the start of an absolute path (`/cl...`) — it must not return skills.
+		const result = await provider.getSuggestions(["open /cl"], 0, "open /cl".length);
+		expect(result?.items.some(i => i.value.startsWith("skill:")) ?? false).toBe(false);
 	});
 
 	it("offers control commands for a leading slash token", async () => {
@@ -334,8 +344,8 @@ describe("inline slash command completion", () => {
 	});
 	it("treats a slash on a later line of a multi-line prompt as inline (no control commands)", async () => {
 		const provider = new CombinedAutocompleteProvider(commands, "/tmp");
-		// `/cle` on line 2 is NOT the leading command — earlier line has prose.
-		const result = await provider.getSuggestions(["explain this", "/cle"], 1, "/cle".length);
+		// `/skill:cl` on line 2 is NOT the leading command — earlier line has prose.
+		const result = await provider.getSuggestions(["explain this", "/skill:cl"], 1, "/skill:cl".length);
 		expect(result).not.toBeNull();
 		const values = result!.items.map(i => i.value);
 		expect(values).toContain("skill:cleanup");

@@ -291,6 +291,29 @@ describe("InputController multi-skill references", () => {
 		expect(handlePythonCommand).toHaveBeenCalledWith("print('/skill:alpha')", false);
 	});
 
+	it("forwards pending images with an inline skill reference and clears them", async () => {
+		const { ctx, editor, promptCustomMessage } = createStubInputControllerContext({
+			skillCommands,
+			isStreaming: false,
+		});
+		(ctx as unknown as { pendingImages: unknown[] }).pendingImages = [
+			{ type: "image", data: "abc", mimeType: "image/png" },
+		];
+		const controller = new InputController(ctx);
+		controller.setupEditorSubmitHandler();
+		const text = "look at this /skill:alpha";
+		editor.setText(text);
+		await editor.onSubmit?.(text);
+
+		expect(promptCustomMessage).toHaveBeenCalledTimes(1);
+		const content = (promptCustomMessage.mock.calls[0]![0] as unknown as { content: unknown }).content;
+		expect(Array.isArray(content)).toBe(true);
+		const parts = content as Array<{ type: string; text?: string }>;
+		expect(parts.some(p => p.type === "image")).toBe(true);
+		expect(parts.find(p => p.type === "text")?.text).toContain("Alpha body.");
+		expect((ctx as unknown as { pendingImages: unknown[] }).pendingImages).toHaveLength(0);
+	});
+
 	it("loads prose references but ignores ones inside code blocks", async () => {
 		const { ctx, editor, promptCustomMessage } = createStubInputControllerContext({
 			skillCommands,

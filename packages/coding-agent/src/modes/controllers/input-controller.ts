@@ -583,8 +583,17 @@ export class InputController {
 		if (refs.length === 0) return false;
 		this.ctx.editor.addToHistory(text);
 		this.ctx.editor.setText("");
+		// Forward any pending clipboard/file images alongside the skill prompt and
+		// clear them, so an inline `/skill:` reference in image-bearing prose does
+		// not silently drop the images the normal submit path would otherwise send.
+		const images = this.ctx.pendingImages.length > 0 ? [...this.ctx.pendingImages] : undefined;
+		this.ctx.pendingImages = [];
 		try {
 			const { message, details } = await this.#buildSkillInvocation(text, refs);
+			// Images ride in the custom-message content array; the chip display only
+			// renders the text parts (SkillMessageComponent#extractText), and both the
+			// streaming and non-streaming dispatch paths forward image content.
+			const content = images ? [{ type: "text" as const, text: message }, ...images] : message;
 			// When the agent is streaming, register the compact typed text as the
 			// pending-display twin BEFORE dispatching the CustomMessage so
 			// AgentSession.#handleAgentEvent can remove the matching display entry
@@ -596,7 +605,7 @@ export class InputController {
 			await this.ctx.session.promptCustomMessage(
 				{
 					customType: SKILL_PROMPT_MESSAGE_TYPE,
-					content: message,
+					content,
 					display: true,
 					details,
 					attribution: "user",

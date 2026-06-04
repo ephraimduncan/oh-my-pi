@@ -295,26 +295,31 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 			};
 		}
 
-		// Slash commands and inline skill references. A slash token may be the
-		// leading command of the message (which can take arguments) or an inline
-		// reference at any later token boundary. Inline references are restricted
-		// to `inlineEligible` commands so control commands (e.g. /model) stay
-		// leading-only and absolute paths are never shadowed.
+		// Slash commands and inline skill references. A leading slash token (first
+		// token of the first line) opens the full command palette and may take
+		// arguments. An inline token (any later token boundary) references an
+		// `inlineEligible` command and is matched by NAME PREFIX only — fuzzy /
+		// description matching would let an ordinary partial absolute path (`/u`,
+		// `/bin`) match skill names and shadow the file-path completion below, so a
+		// non-prefix inline token falls through to path completion instead.
 		const slashToken = findSlashCommandToken(textBeforeCursor);
 		if (slashToken) {
-			// A token is the *leading* command of the message only when it starts
-			// the current line AND every earlier line is blank — otherwise it is an
-			// inline reference (e.g. a `/` on line 2 of a multi-line prompt), which
-			// is restricted to `inlineEligible` commands.
 			const priorLinesBlank = lines.slice(0, cursorLine).every(line => line.trim() === "");
 			const isLeading = slashToken.atLineStart && priorLinesBlank;
 			const lowerPrefix = slashToken.token.slice(1).toLowerCase();
-			const pool = isLeading
-				? this.#commands
-				: this.#commands.filter(cmd => "inlineEligible" in cmd && cmd.inlineEligible);
-			const matches = this.#matchCommandNames(pool, lowerPrefix);
-			if (matches.length === 0) return null;
-			return { items: matches, prefix: slashToken.token };
+			if (isLeading) {
+				const matches = this.#matchCommandNames(this.#commands, lowerPrefix);
+				if (matches.length === 0) return null;
+				return { items: matches, prefix: slashToken.token };
+			}
+			const inlinePool = this.#commands.filter(cmd => {
+				if (!("inlineEligible" in cmd) || !cmd.inlineEligible) return false;
+				return cmd.name.toLowerCase().startsWith(lowerPrefix);
+			});
+			if (inlinePool.length > 0) {
+				return { items: this.#matchCommandNames(inlinePool, lowerPrefix), prefix: slashToken.token };
+			}
+			// No inline command matches this prefix — fall through to path completion.
 		}
 
 		// Leading command argument completion: the line begins with "/cmd " and
