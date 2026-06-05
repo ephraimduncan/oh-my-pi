@@ -59,6 +59,7 @@ type StubEditor = {
 function createStubInputControllerContext(opts: {
 	skillCommands: Map<string, string>;
 	isStreaming: boolean;
+	isCompacting?: boolean;
 	pendingImages?: InteractiveModeContext["pendingImages"];
 	extensionRunner?: unknown;
 }) {
@@ -79,6 +80,7 @@ function createStubInputControllerContext(opts: {
 	const updatePendingMessagesDisplay = vi.fn();
 	const requestRender = vi.fn();
 	const showError = vi.fn();
+	const queueCompactionMessage = vi.fn();
 
 	const ctx = {
 		editor,
@@ -86,7 +88,7 @@ function createStubInputControllerContext(opts: {
 		skillCommands: opts.skillCommands,
 		session: {
 			isStreaming: opts.isStreaming,
-			isCompacting: false,
+			isCompacting: opts.isCompacting ?? false,
 			isBashRunning: false,
 			isEvalRunning: false,
 			extensionRunner: opts.extensionRunner,
@@ -103,11 +105,12 @@ function createStubInputControllerContext(opts: {
 		isBackgrounded: false,
 		loopModeEnabled: false,
 		compactionQueuedMessages: [],
+		queueCompactionMessage,
 		locallySubmittedUserSignatures: new Set<string>(),
 		withLocalSubmission: async (_text: string, fn: () => unknown) => fn(),
 	} as unknown as InteractiveModeContext;
 
-	return { ctx, editor, enqueueCustomMessageDisplay, promptCustomMessage };
+	return { ctx, editor, enqueueCustomMessageDisplay, promptCustomMessage, queueCompactionMessage };
 }
 
 describe("InputController #invokeSkillCommands (E1-E3)", () => {
@@ -277,6 +280,24 @@ describe("InputController multi-skill references", () => {
 		expect(images).toEqual([updated]);
 		// The consumed clipboard buffer is cleared so it cannot re-attach.
 		expect(ctx.pendingImages).toEqual([]);
+	});
+
+	it("queues an inline skill prompt during compaction instead of dispatching it", async () => {
+		// During compaction the input must reach the compaction queue (replayed
+		// afterward), not race the compaction turn via promptCustomMessage (Codex P2).
+		const { ctx, editor, promptCustomMessage, queueCompactionMessage } = createStubInputControllerContext({
+			skillCommands,
+			isStreaming: false,
+			isCompacting: true,
+		});
+		const controller = new InputController(ctx);
+		controller.setupEditorSubmitHandler();
+		const text = "please use /skill:alpha";
+		editor.setText(text);
+		await editor.onSubmit?.(text);
+
+		expect(promptCustomMessage).not.toHaveBeenCalled();
+		expect(queueCompactionMessage).toHaveBeenCalledWith(text, "steer");
 	});
 
 	it("does not consume a /skill: reference inside a fenced code block", async () => {

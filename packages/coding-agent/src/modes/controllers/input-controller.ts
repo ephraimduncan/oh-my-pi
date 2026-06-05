@@ -583,6 +583,12 @@ export class InputController {
 		// (e.g. `! echo /skill:foo`, `$ print("/skill:foo")`) must not be hijacked as
 		// a skill reference. Mirror those handlers' `startsWith` checks.
 		if (text.startsWith("!") || text.startsWith("$")) return false;
+		// During compaction the input must reach the compaction queue guard below
+		// (handleFollowUp checks compaction before this call for the same reason).
+		// Returning false lets an inline `/skill:` prompt fall through to
+		// queueCompactionMessage so it is replayed after compaction instead of
+		// racing the compaction turn or being lost.
+		if (this.ctx.session.isCompacting) return false;
 		if (!text.includes("/skill:")) return false;
 		const refs = this.#collectSkillReferences(text);
 		if (refs.length === 0) return false;
