@@ -13,8 +13,8 @@
  * `setProjectDir`, so this module never changes the process directory itself.
  *
  * The workspace is persistent: it is left in place when the session ends so
- * the user can inspect, diff, and merge it manually (`rm -rf <path>` or
- * `omp wt`). Unlike subagent isolation there is no auto merge-back or cleanup.
+ * the user can inspect, diff, and merge it manually, then remove it with
+ * `omp wt clear --all`. Unlike subagent isolation there is no auto merge-back or cleanup.
  *
  * PR-based worktrees (`#1234`) are intentionally out of scope — `omp gh
  * pr_checkout` already checks a pull request out into a dedicated worktree.
@@ -65,7 +65,7 @@ const BACKEND_LABELS: Record<IsoBackendKind, string> = {
 /**
  * Backends whose `merged` view is a live mount, not a real on-disk directory.
  * A persistent `--worktree` workspace must survive process exit as an inspectable
- * directory the user can diff and `rm -rf`; a mount-only view does not (its
+ * directory the user can diff and remove; a mount-only view does not (its
  * contents vanish on unmount, with changes stranded in a sibling upper/work dir),
  * so `createWorktree` rejects them when explicit and excludes them from auto.
  */
@@ -166,14 +166,14 @@ export async function createWorktree(
 	);
 	if (baseDirExists) {
 		throw new Error(
-			`A worktree named "${name}" already exists at ${baseDir}. Inspect or merge it, remove it (\`rm -rf ${baseDir}\` or \`omp wt clear --all\`), or choose a different --worktree name.`,
+			`A worktree named "${name}" already exists at ${baseDir}. Inspect or merge it, remove it with \`omp wt clear --all\`, or choose a different --worktree name.`,
 		);
 	}
 
 	const requestedBackend = parseIsolationMode(isolationMode);
 	if (requestedBackend !== undefined && MOUNT_ONLY_BACKENDS.has(requestedBackend)) {
 		throw new Error(
-			`--worktree cannot use the "${isolationMode}" isolation backend: it is mount-only, but a persistent worktree must stay a real directory after the session ends (so you can inspect, diff, and \`rm -rf\` it). Set task.isolation.mode to a directory-materializing backend — rcopy, reflink, apfs, btrfs, zfs, or block-clone.`,
+			`--worktree cannot use the "${isolationMode}" isolation backend: it is mount-only, but a persistent worktree must stay a real directory after the session ends (so you can inspect, diff, and remove it). Set task.isolation.mode to a directory-materializing backend — rcopy, reflink, apfs, btrfs, zfs, or block-clone.`,
 		);
 	}
 	// Persistent worktrees need a directory-materializing backend; exclude

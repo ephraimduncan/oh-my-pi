@@ -280,7 +280,15 @@ describe("createWorktree (integration)", () => {
 		const { baseDir } = await resolveIsolationPaths(repo, "dup");
 		await fs.mkdir(baseDir, { recursive: true });
 		tempDirs.push(baseDir);
-		await expect(createWorktree(repo, "dup", "rcopy")).rejects.toThrow(/already exists/i);
+		const err = await createWorktree(repo, "dup", "rcopy").then(
+			() => null,
+			(e: unknown) => (e instanceof Error ? e : new Error(String(e))),
+		);
+		expect(err?.message).toMatch(/already exists/i);
+		// Recommend the unregistering cleanup, not a destructive rm -rf that leaves an
+		// rcopy git worktree registered.
+		expect(err?.message).toContain("omp wt clear");
+		expect(err?.message).not.toContain("rm -rf");
 		// Refused before materialising anything.
 		expect(isoStart).not.toHaveBeenCalled();
 	});
