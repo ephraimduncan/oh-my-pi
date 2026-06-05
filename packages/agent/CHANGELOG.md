@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Compaction now inherits the selected model's configured `thinking.defaultLevel` (e.g. Opus 4.7+ Messages `xhigh`) when the caller passes no explicit thinking level (`undefined`/`Inherit`), instead of always falling back to `Effort.High`. After the Opus 4.7+ 1:1 adaptive-effort remap, the hardcoded `Effort.High` default mapped to Anthropic wire `high` rather than the prior `xhigh`, silently lowering out-of-box summarizer depth; the resolver now mirrors the model-default applied on `/model` switch. ([#1731](https://github.com/can1357/oh-my-pi/pull/1731))
+
 ## [15.8.3] - 2026-06-03
 ### Added
 

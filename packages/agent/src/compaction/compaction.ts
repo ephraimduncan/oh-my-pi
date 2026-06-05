@@ -535,8 +535,12 @@ function effortFromThinkingLevel(level: ThinkingLevel): Effort {
  * Resolves the reasoning effort to send on a compaction LLM call.
  *
  * - Explicit `Off` → `undefined` (omit reasoning entirely; the user said no thinking).
- * - `undefined` / `Inherit` → historical `Effort.High` default → clamped per model
- *   (preserves current behavior for users who never touched the dial).
+ * - `undefined` / `Inherit` → the model's configured `thinking.defaultLevel`
+ *   when present (e.g. Opus 4.7+ Messages default `xhigh`), else the historical
+ *   `Effort.High` default → clamped per model. Mirrors the model-default applied
+ *   on `/model` switch (`AgentSession.#reapplyThinkingLevel`) so compaction
+ *   inherits the same out-of-box thinking depth a normal turn uses, instead of
+ *   silently dropping it (e.g. Opus 4.7+ wire `xhigh` → `high`).
  * - Explicit effort → respect user choice → clamped per model.
  *
  * The clamp routes through `clampThinkingLevelForModel`, which returns
@@ -548,7 +552,9 @@ function effortFromThinkingLevel(level: ThinkingLevel): Effort {
 function resolveCompactionEffort(model: Model, level: ThinkingLevel | undefined): Effort | undefined {
 	if (level === ThinkingLevel.Off) return undefined;
 	const requested: Effort =
-		level === undefined || level === ThinkingLevel.Inherit ? Effort.High : effortFromThinkingLevel(level);
+		level === undefined || level === ThinkingLevel.Inherit
+			? (model.thinking?.defaultLevel ?? Effort.High)
+			: effortFromThinkingLevel(level);
 	return clampThinkingLevelForModel(model, requested);
 }
 

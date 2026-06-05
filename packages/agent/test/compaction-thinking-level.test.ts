@@ -23,7 +23,7 @@ import { getBundledModel } from "@oh-my-pi/pi-ai/models";
 //
 // `resolveCompactionEffort` is the per-call resolver:
 // - `Off`              → `undefined` (user said no thinking; honored)
-// - `undefined`/`Inherit` → `Effort.High` default → clamped per model
+// - `undefined`/`Inherit` → model `thinking.defaultLevel` (e.g. Opus 4.7+ `xhigh`) else `Effort.High` → clamped per model
 // - explicit Effort    → respect it → clamped per model
 //
 // `generateHandoff` is chosen as the test vehicle because it issues exactly
@@ -61,6 +61,14 @@ function getAnthropicModel(): Model {
 function getGrokBuildModel(): Model {
 	const model = getBundledModel("xai-oauth", "grok-build");
 	if (!model) throw new Error("Expected built-in xai-oauth/grok-build to exist");
+	return model;
+}
+
+function getOpusModel(): Model {
+	// Opus 4.7+ on the Messages API carries thinking.defaultLevel=xhigh, so an
+	// inherited/undefined compaction effort must resolve to xhigh, not drop to high.
+	const model = getBundledModel("anthropic", "claude-opus-4-8");
+	if (!model) throw new Error("Expected built-in anthropic/claude-opus-4-8 to exist");
 	return model;
 }
 
@@ -147,6 +155,34 @@ describe("compaction thinking-level resolution (regression)", () => {
 		const call = spy.mock.calls[0];
 		if (!call) throw new Error("expected completeSimple call");
 		expect(call[2]?.reasoning).toBe(ai.Effort.High);
+	});
+
+	test("undefined thinkingLevel on Opus 4.7+ → reasoning=xhigh (model defaultLevel honored)", async () => {
+		const spy = vi
+			.spyOn(ai, "completeSimple")
+			.mockResolvedValue(createAssistantMessage([{ type: "text", text: "handoff" }]));
+		await generateHandoff(messages, getOpusModel(), "test-key", {
+			systemPrompt: ["sp"],
+			tools: [],
+			// thinkingLevel omitted — must inherit the model's xhigh default, not drop to high
+		});
+		const call = spy.mock.calls[0];
+		if (!call) throw new Error("expected completeSimple call");
+		expect(call[2]?.reasoning).toBe(ai.Effort.XHigh);
+	});
+
+	test("ThinkingLevel.Inherit on Opus 4.7+ → reasoning=xhigh (folds to model defaultLevel)", async () => {
+		const spy = vi
+			.spyOn(ai, "completeSimple")
+			.mockResolvedValue(createAssistantMessage([{ type: "text", text: "handoff" }]));
+		await generateHandoff(messages, getOpusModel(), "test-key", {
+			systemPrompt: ["sp"],
+			tools: [],
+			thinkingLevel: ThinkingLevel.Inherit,
+		});
+		const call = spy.mock.calls[0];
+		if (!call) throw new Error("expected completeSimple call");
+		expect(call[2]?.reasoning).toBe(ai.Effort.XHigh);
 	});
 });
 
