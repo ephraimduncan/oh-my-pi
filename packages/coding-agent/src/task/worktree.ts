@@ -306,15 +306,35 @@ function errorMessage(err: unknown): string {
 	return err instanceof Error ? err.message : String(err);
 }
 
+/**
+ * Marker file written into a persistent `--worktree` workspace's base dir (next
+ * to `merged`). Distinguishes a user-facing persistent worktree from an ephemeral
+ * task-isolation leftover so `omp wt clear` does not GC it by default.
+ */
+export const PERSISTENT_WORKTREE_MARKER = ".omp-worktree";
+
+/**
+ * Resolve the on-disk layout for an isolation workspace: the wrapper `baseDir`
+ * (under `~/.omp/wt/`) and the `merged` view inside it. Shared by
+ * {@link ensureIsolation} and `--worktree` so existence checks and markers
+ * address the exact path the backend materialises.
+ */
+export async function resolveIsolationPaths(
+	baseCwd: string,
+	id: string,
+): Promise<{ repoRoot: string; baseDir: string; mergedDir: string }> {
+	const repoRoot = await getRepoRoot(baseCwd);
+	const baseDir = getWorktreeDir(`${id}-${hashPath(repoRoot)}`);
+	return { repoRoot, baseDir, mergedDir: path.join(baseDir, "merged") };
+}
+
 export async function ensureIsolation(
 	baseCwd: string,
 	id: string,
 	preferred?: IsoBackendKind,
 	opts?: { excludeBackends?: ReadonlySet<IsoBackendKind> },
 ): Promise<IsolationHandle> {
-	const repoRoot = await getRepoRoot(baseCwd);
-	const baseDir = getWorktreeDir(`${id}-${hashPath(repoRoot)}`);
-	const mergedDir = path.join(baseDir, "merged");
+	const { repoRoot, baseDir, mergedDir } = await resolveIsolationPaths(baseCwd, id);
 
 	const resolution = natives.isoResolve(preferred ?? null);
 	let candidates = resolution.candidates.length > 0 ? resolution.candidates : [resolution.kind];

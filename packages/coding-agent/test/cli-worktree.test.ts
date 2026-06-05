@@ -3,9 +3,11 @@ import * as fs from "node:fs/promises";
 import * as os from "node:os";
 import * as path from "node:path";
 import * as natives from "@oh-my-pi/pi-natives";
+import { getAgentDir, getWorktreesDir, setAgentDir } from "@oh-my-pi/pi-utils";
 import { parseArgs } from "../src/cli/args";
+import { clearWorktrees } from "../src/cli/worktree-cli";
 import { createWorktree, slugifyWorktreeName } from "../src/cli/worktree-create";
-import { parseIsolationMode } from "../src/task/worktree";
+import { PERSISTENT_WORKTREE_MARKER, parseIsolationMode, resolveIsolationPaths } from "../src/task/worktree";
 
 describe("parseArgs — --worktree / -w", () => {
 	it("auto-generates a name when --worktree has no value (true)", () => {
@@ -270,4 +272,59 @@ describe("createWorktree (integration)", () => {
 		// No isolated workspace dir was created under the (temp) home.
 		await expect(fs.stat(path.join(home, ".omp", "wt"))).rejects.toThrow();
 	}, 20_000);
+
+	it("refuses to clobber an existing workspace with the same name", async () => {
+		const repo = await createGitRepo();
+		const isoStart = vi.spyOn(natives, "isoStart").mockResolvedValue(undefined);
+		// Pre-create the workspace at the exact path createWorktree would target.
+		const { baseDir } = await resolveIsolationPaths(repo, "dup");
+		await fs.mkdir(baseDir, { recursive: true });
+		tempDirs.push(baseDir);
+		await expect(createWorktree(repo, "dup", "rcopy")).rejects.toThrow(/already exists/i);
+		// Refused before materialising anything.
+		expect(isoStart).not.toHaveBeenCalled();
+	});
+});
+
+describe("clearWorktrees persistent worktree protection", () => {
+	const tempHomes: string[] = [];
+	let originalAgentDir: string;
+
+	beforeEach(async () => {
+		const home = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "omp-wt-clear-home-")));
+		tempHomes.push(home);
+		vi.spyOn(os, "homedir").mockReturnValue(home);
+		// dirs resolver caches off os.homedir at construction; setAgentDir rebuilds
+		// it so getWorktreesDir() resolves under the temp home (see gh.test.ts).
+		originalAgentDir = getAgentDir();
+		setAgentDir(path.join(home, ".omp", "agent"));
+	});
+
+	afterEach(async () => {
+		setAgentDir(originalAgentDir);
+		vi.restoreAllMocks();
+		await Promise.all(tempHomes.splice(0).map(dir => fs.rm(dir, { recursive: true, force: true })));
+	});
+
+	it("keeps marked persistent worktrees and removes only unmarked task-isolation leftovers", async () => {
+		const wtRoot = getWorktreesDir();
+		// Persistent worktree: merged wrapper + marker → live, kept without --all.
+		const persistent = path.join(wtRoot, "feature-abcd1234");
+		await fs.mkdir(path.join(persistent, "merged"), { recursive: true });
+		await fs.writeFile(path.join(persistent, PERSISTENT_WORKTREE_MARKER), "{}\n");
+		// Task-isolation leftover: merged wrapper, no marker → orphan, removed.
+		const leftover = path.join(wtRoot, "task-deadbeef");
+		await fs.mkdir(path.join(leftover, "merged"), { recursive: true });
+
+		const logs: string[] = [];
+		const logSpy = vi.spyOn(console, "log").mockImplementation((msg?: unknown) => {
+			logs.push(String(msg));
+		});
+		await clearWorktrees({ all: false, dryRun: true, json: true });
+		logSpy.mockRestore();
+
+		const wouldRemove: string[] = JSON.parse(logs.join("\n")).wouldRemove ?? [];
+		expect(wouldRemove).toContain(leftover);
+		expect(wouldRemove).not.toContain(persistent);
+	});
 });

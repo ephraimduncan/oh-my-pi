@@ -19,10 +19,19 @@
  * PR-based worktrees (`#1234`) are intentionally out of scope — `omp gh
  * pr_checkout` already checks a pull request out into a dedicated worktree.
  */
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
 import * as natives from "@oh-my-pi/pi-natives";
+import { logger } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 import { generateTaskName } from "../task/name-generator";
-import { ensureIsolation, parseIsolationMode, type TaskIsolationMode } from "../task/worktree";
+import {
+	ensureIsolation,
+	PERSISTENT_WORKTREE_MARKER,
+	parseIsolationMode,
+	resolveIsolationPaths,
+	type TaskIsolationMode,
+} from "../task/worktree";
 import * as git from "../utils/git";
 
 const { IsoBackendKind } = natives;
@@ -138,6 +147,20 @@ export async function createWorktree(
 	const requested = value === true ? "" : slugifyWorktreeName(value);
 	// An empty/garbage name (e.g. `-w "###"`) falls back to an auto-generated one.
 	const name = requested || slugifyWorktreeName(generateTaskName());
+	// Refuse to clobber an existing workspace: ensureIsolation rm -rf's the base
+	// dir before re-creating it, which would silently destroy unmerged edits from
+	// a previous `--worktree <name>` session. Require the user to inspect/merge/
+	// remove it or pick a different name.
+	const { baseDir } = await resolveIsolationPaths(cwd, name);
+	const baseDirExists = await fs.stat(baseDir).then(
+		() => true,
+		() => false,
+	);
+	if (baseDirExists) {
+		throw new Error(
+			`A worktree named "${name}" already exists at ${baseDir}. Inspect or merge it, remove it (\`rm -rf ${baseDir}\` or \`omp wt clear --all\`), or choose a different --worktree name.`,
+		);
+	}
 
 	const requestedBackend = parseIsolationMode(isolationMode);
 	if (requestedBackend !== undefined && MOUNT_ONLY_BACKENDS.has(requestedBackend)) {
@@ -149,6 +172,21 @@ export async function createWorktree(
 	// mount-only views so auto-resolution downgrades to rcopy instead of leaving
 	// an unusable live mount behind.
 	const handle = await ensureIsolation(cwd, name, requestedBackend, { excludeBackends: MOUNT_ONLY_BACKENDS });
+
+	// Mark this as a persistent worktree so `omp wt clear` treats it as a live
+	// workspace (not a task-isolation leftover) and leaves it unless `--all` is
+	// passed. Best-effort: a missing marker only forfeits that protection.
+	try {
+		await fs.writeFile(
+			path.join(baseDir, PERSISTENT_WORKTREE_MARKER),
+			`${JSON.stringify({ name, createdAt: new Date().toISOString() })}\n`,
+		);
+	} catch (err) {
+		logger.warn("failed to write persistent worktree marker", {
+			baseDir,
+			error: err instanceof Error ? err.message : String(err),
+		});
+	}
 
 	const created: CreatedWorktree = {
 		name,

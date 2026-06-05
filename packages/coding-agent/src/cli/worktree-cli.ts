@@ -10,6 +10,10 @@
  *     `merged` subdir mounted/cloned by `natives.isoStart`. These are ephemeral
  *     — `ensureIsolation` always `rm -rf`s the base before re-creating it, so
  *     any leftover on disk is a leak from a crashed run.
+ *   - **Persistent `--worktree` workspaces** (`cli/worktree-create.ts`): the same
+ *     `merged` wrapper layout as task isolation, but carrying a
+ *     `PERSISTENT_WORKTREE_MARKER` file. These are user-facing and kept on exit,
+ *     so they classify as live and are GC'd only with `--all`.
  *
  * Legacy entries from before the encoding change keep working because git still
  * tracks them by branch name. This command exists to GC them on demand.
@@ -18,9 +22,10 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { getWorktreesDir, isEnoent } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
+import { PERSISTENT_WORKTREE_MARKER } from "../task/worktree";
 import * as git from "../utils/git";
 
-type WorktreeKind = "pr-checkout" | "task-isolation" | "empty" | "stray";
+type WorktreeKind = "pr-checkout" | "persistent-worktree" | "task-isolation" | "empty" | "stray";
 
 export interface WorktreeEntry {
 	/** Absolute path to the worktree dir (or stray container) under `~/.omp/wt/`. */
@@ -209,6 +214,13 @@ async function classifyDir(dir: string): Promise<WorktreeEntry | null> {
 	if (gitStat?.isFile()) {
 		return classifyPrCheckout(dir, gitEntry);
 	}
+	const markerStat = await fs.stat(path.join(dir, PERSISTENT_WORKTREE_MARKER)).catch(() => null);
+	if (markerStat?.isFile()) {
+		// Persistent `--worktree` workspace: a live, user-facing artifact, not a
+		// task-isolation leftover. No orphanReason → `omp wt clear` keeps it unless
+		// `--all` is passed.
+		return { path: dir, kind: "persistent-worktree" };
+	}
 	const mergedStat = await fs.stat(path.join(dir, "merged")).catch(() => null);
 	if (mergedStat?.isDirectory()) {
 		return {
@@ -279,6 +291,8 @@ function formatEntryDetail(entry: WorktreeEntry): string {
 		const repo = entry.parentRepo ? path.basename(entry.parentRepo) : "unknown repo";
 		const branch = entry.branch ?? "unknown branch";
 		parts.push(`${repo} · ${branch}`);
+	} else if (entry.kind === "persistent-worktree") {
+		parts.push("persistent worktree");
 	} else if (entry.kind === "task-isolation") {
 		parts.push("task-isolation sandbox");
 	} else if (entry.kind === "empty") {
