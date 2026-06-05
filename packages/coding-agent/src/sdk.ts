@@ -1006,7 +1006,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			let failedSessionModel: string | undefined;
 			for (let i = 0; i < sessionModelStrings.length; i++) {
 				const sessionModelStr = sessionModelStrings[i];
-				const parsedModel = parseModelString(sessionModelStr);
+				const parsedModel = parseModelString(
+					sessionModelStr,
+					(prov, mid) => modelRegistry.find(prov, mid) !== undefined,
+				);
 				if (!parsedModel) {
 					failedSessionModel ??= sessionModelStr;
 					continue;
@@ -1459,7 +1462,10 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		if (!hasExplicitModel && sessionRetryLimit > 0) {
 			for (let i = 0; i < sessionRetryLimit; i++) {
 				const sessionModelStr = sessionModelStrings[i];
-				const parsedModel = parseModelString(sessionModelStr);
+				const parsedModel = parseModelString(
+					sessionModelStr,
+					(prov, mid) => modelRegistry.find(prov, mid) !== undefined,
+				);
 				if (!parsedModel) continue;
 				const restoredModel = modelRegistry.find(parsedModel.provider, parsedModel.id);
 				if (restoredModel && (await hasModelApiKey(restoredModel))) {

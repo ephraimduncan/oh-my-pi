@@ -916,6 +916,21 @@ describe("parseModelString", () => {
 			const result = parseModelString("anthropic/claude-opus-4-7:max");
 			expect(result).toEqual({ provider: "anthropic", id: "claude-opus-4-7", thinkingLevel: Effort.Max });
 		});
+
+		test("keeps a non-bundled :max id when isKnownModel recognizes it (custom/proxy model)", () => {
+			// A discovered/proxy model whose real id ends in :max — registry-aware
+			// callers report it via isKnownModel so session restore resolves it.
+			const result = parseModelString(
+				"proxy/vendor/router:max",
+				(prov, id) => prov === "proxy" && id === "vendor/router:max",
+			);
+			expect(result).toEqual({ provider: "proxy", id: "vendor/router:max" });
+		});
+
+		test("still strips :max when neither the catalog nor isKnownModel recognizes the full id", () => {
+			const result = parseModelString("proxy/vendor/router:max", () => false);
+			expect(result).toEqual({ provider: "proxy", id: "vendor/router", thinkingLevel: Effort.Max });
+		});
 	});
 });
 

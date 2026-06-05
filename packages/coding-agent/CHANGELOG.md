@@ -8,7 +8,7 @@
 
 ### Fixed
 
-- Fixed model selectors whose id legitimately ends in a thinking-like suffix (e.g. the bundled `nanogpt/coding-router:max` / `:high` route variants) being mis-parsed once `:max` joined the thinking levels: `parseModelString` no longer strips the suffix when the full `provider/id` is a known bundled model, so session restore and `--model` resolve the real model instead of a non-existent base id ([#1731](https://github.com/can1357/oh-my-pi/pull/1731) by [@ephraimduncan](https://github.com/ephraimduncan)).
+- Fixed model selectors whose id legitimately ends in a thinking-like suffix (e.g. the bundled `nanogpt/coding-router:max` / `:high` route variants, or a custom/proxy model id ending in `:max`) being mis-parsed once `:max` joined the thinking levels: `parseModelString` no longer strips the suffix when the full `provider/id` is a known model — bundled, or recognized by the registry-aware `isKnownModel` predicate that session restore and `--model` resolution now pass — so those flows resolve the real model instead of a non-existent base id ([#1731](https://github.com/can1357/oh-my-pi/pull/1731) by [@ephraimduncan](https://github.com/ephraimduncan)).
 ## [15.9.1] - 2026-06-04
 
 ### Added

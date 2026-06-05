@@ -33,23 +33,32 @@ export interface ScopedModel {
 /**
  * Parse a model string in "provider/modelId" format.
  * Returns undefined if the format is invalid.
+ *
+ * `isKnownModel`, when supplied, lets registry-aware callers (e.g. session
+ * restore) report whether the full `provider/id` is a real model so a custom or
+ * discovered id ending in a thinking-like token (`proxy/vendor/router:max`) is not
+ * mis-parsed as id + thinking selector. Bundled models are always recognized.
  */
 export function parseModelString(
 	modelStr: string,
+	isKnownModel?: (provider: string, id: string) => boolean,
 ): { provider: string; id: string; thinkingLevel?: ThinkingLevel } | undefined {
 	const slashIdx = modelStr.indexOf("/");
 	if (slashIdx <= 0) return undefined;
 	const id = modelStr.slice(slashIdx + 1);
 	const provider = modelStr.slice(0, slashIdx);
 	// Strip a valid thinking-level suffix (e.g. "claude-sonnet-4-6:high"). Skip this
-	// when the full id is itself a known bundled model whose id ends in a
-	// thinking-like token (e.g. "nanogpt/nanogpt/coding-router:max"), so the new
-	// `:max` tier does not shadow a real ":max" model id.
+	// when the full id is itself a known model whose id ends in a thinking-like
+	// token — the bundled "nanogpt/coding-router:max" route, or a custom/proxy model
+	// the caller recognizes via isKnownModel — so the `:max` tier does not shadow a
+	// real ":max" model id.
 	const colonIdx = id.lastIndexOf(":");
 	if (colonIdx !== -1) {
 		const suffix = id.slice(colonIdx + 1);
 		const thinkingLevel = parseThinkingLevel(suffix);
-		if (thinkingLevel && !getBundledModel(provider as GeneratedProvider, id)) {
+		const isExactModel =
+			Boolean(getBundledModel(provider as GeneratedProvider, id)) || (isKnownModel?.(provider, id) ?? false);
+		if (thinkingLevel && !isExactModel) {
 			return { provider, id: id.slice(0, colonIdx), thinkingLevel };
 		}
 	}
@@ -680,7 +689,7 @@ export function resolveModelFromString(
 	matchPreferences?: ModelMatchPreferences,
 	modelRegistry?: CanonicalModelRegistry,
 ): Model<Api> | undefined {
-	const parsed = parseModelString(value);
+	const parsed = parseModelString(value, (prov, mid) => available.some(m => m.provider === prov && m.id === mid));
 	if (parsed) {
 		const exact = available.find(model => model.provider === parsed.provider && model.id === parsed.id);
 		if (exact) return exact;
