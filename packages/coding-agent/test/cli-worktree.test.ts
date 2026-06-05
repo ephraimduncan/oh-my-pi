@@ -93,7 +93,7 @@ describe("createWorktree (integration)", () => {
 	beforeEach(() => {
 		// Silence the creation report; the contract under test is the returned
 		// handle and the backend the PAL was asked for, not the printed summary.
-		vi.spyOn(process.stdout, "write").mockReturnValue(true);
+		vi.spyOn(process.stderr, "write").mockReturnValue(true);
 	});
 
 	afterEach(async () => {
@@ -191,6 +191,51 @@ describe("createWorktree (integration)", () => {
 		expect(created.backend).toBe(natives.IsoBackendKind.Rcopy);
 		expect(created.fellBack).toBe(true);
 		expect(created.fallbackReason).toBe(unavailable.message);
+	});
+
+	it("rejects an explicit mount-only backend (overlayfs) for a persistent worktree", async () => {
+		const repo = await createGitRepo();
+		const isoStart = vi.spyOn(natives, "isoStart").mockResolvedValue(undefined);
+		// overlayfs is mount-only; a persistent worktree needs a real directory.
+		await expect(createWorktree(repo, "x", "overlayfs")).rejects.toThrow(/mount-only/i);
+		// Rejected before any workspace was materialised.
+		expect(isoStart).not.toHaveBeenCalled();
+	});
+
+	it("excludes mount-only backends from auto-resolution and floors to rcopy", async () => {
+		const repo = await createGitRepo();
+		// Auto resolution offers only overlayfs (mount-only); the exclude filter
+		// must drop it and floor to rcopy so the workspace stays a real directory.
+		vi.spyOn(natives, "isoResolve").mockReturnValue({
+			kind: natives.IsoBackendKind.Overlayfs,
+			candidates: [natives.IsoBackendKind.Overlayfs],
+			fellBack: false,
+			reason: undefined,
+		});
+		const isoStart = vi.spyOn(natives, "isoStart").mockResolvedValue(undefined);
+
+		const created = await createWorktree(repo, "auto-wt", "auto");
+
+		expect(created.backend).toBe(natives.IsoBackendKind.Rcopy);
+		// overlayfs was never started; rcopy was substituted by the exclude filter.
+		expect(isoStart).toHaveBeenCalledTimes(1);
+		expect(isoStart).toHaveBeenCalledWith(natives.IsoBackendKind.Rcopy, expect.any(String), created.workspacePath);
+	});
+
+	it("writes the workspace banner to stderr, never stdout (keeps --mode json output clean)", async () => {
+		const repo = await createGitRepo();
+		vi.spyOn(natives, "isoResolve").mockReturnValue({
+			kind: natives.IsoBackendKind.Rcopy,
+			candidates: [natives.IsoBackendKind.Rcopy],
+			fellBack: false,
+			reason: undefined,
+		});
+		vi.spyOn(natives, "isoStart").mockResolvedValue(undefined);
+		const stdoutWrite = vi.spyOn(process.stdout, "write").mockReturnValue(true);
+
+		await createWorktree(repo, "banner", "rcopy");
+
+		expect(stdoutWrite).not.toHaveBeenCalled();
 	});
 
 	it("rejects pull-request refs with a pointer to omp gh pr_checkout", async () => {

@@ -5,7 +5,10 @@
  * user-chosen isolation primitive that subagent tasks use: the
  * `task.isolation.mode` setting drives the native PAL (`isoResolve` /
  * `isoStart`), which materialises a writable view of the repository — a
- * CoW clone, an overlay, or a recursive copy — under `~/.omp/wt/<name>/merged`.
+ * CoW clone, a snapshot, or a recursive copy — under `~/.omp/wt/<name>/merged`.
+ * Mount-only backends (overlayfs/projfs) are excluded here: the workspace must
+ * persist as a real directory after the session exits (see below), which a live
+ * mount does not provide.
  * The caller (`main.ts`) switches the session into the returned path via
  * `setProjectDir`, so this module never changes the process directory itself.
  *
@@ -51,6 +54,15 @@ const BACKEND_LABELS: Record<IsoBackendKind, string> = {
 };
 
 /**
+ * Backends whose `merged` view is a live mount, not a real on-disk directory.
+ * A persistent `--worktree` workspace must survive process exit as an inspectable
+ * directory the user can diff and `rm -rf`; a mount-only view does not (its
+ * contents vanish on unmount, with changes stranded in a sibling upper/work dir),
+ * so `createWorktree` rejects them when explicit and excludes them from auto.
+ */
+const MOUNT_ONLY_BACKENDS: ReadonlySet<IsoBackendKind> = new Set([IsoBackendKind.Overlayfs, IsoBackendKind.Projfs]);
+
+/**
  * Convert an arbitrary label into a git-safe, lowercase slug usable as the
  * isolation id and directory segment. CamelCase boundaries (from
  * {@link generateTaskName}) split into words; every other run of non-alphanumeric
@@ -81,17 +93,17 @@ function isPullRequestRef(value: string): boolean {
 
 function reportCreatedWorktree(created: CreatedWorktree): void {
 	const { name, workspacePath, backend, fellBack, fallbackReason } = created;
-	process.stdout.write(
+	process.stderr.write(
 		`${chalk.green("Isolated workspace")} ${chalk.bold(name)} ${chalk.dim(`(${BACKEND_LABELS[backend]})`)}\n`,
 	);
-	process.stdout.write(chalk.dim(`  ${workspacePath}\n`));
+	process.stderr.write(chalk.dim(`  ${workspacePath}\n`));
 	if (fellBack) {
 		const reason = fallbackReason ? `: ${fallbackReason}` : "";
-		process.stdout.write(
+		process.stderr.write(
 			chalk.yellow(`  Requested backend unavailable — fell back to ${BACKEND_LABELS[backend]}${reason}\n`),
 		);
 	}
-	process.stdout.write(chalk.dim(`  Remove it later with: rm -rf ${workspacePath}\n`));
+	process.stderr.write(chalk.dim(`  Remove it later with: rm -rf ${workspacePath}\n`));
 }
 
 /**
@@ -127,7 +139,16 @@ export async function createWorktree(
 	// An empty/garbage name (e.g. `-w "###"`) falls back to an auto-generated one.
 	const name = requested || slugifyWorktreeName(generateTaskName());
 
-	const handle = await ensureIsolation(cwd, name, parseIsolationMode(isolationMode));
+	const requestedBackend = parseIsolationMode(isolationMode);
+	if (requestedBackend !== undefined && MOUNT_ONLY_BACKENDS.has(requestedBackend)) {
+		throw new Error(
+			`--worktree cannot use the "${isolationMode}" isolation backend: it is mount-only, but a persistent worktree must stay a real directory after the session ends (so you can inspect, diff, and \`rm -rf\` it). Set task.isolation.mode to a directory-materializing backend — rcopy, reflink, apfs, btrfs, zfs, or block-clone.`,
+		);
+	}
+	// Persistent worktrees need a directory-materializing backend; exclude
+	// mount-only views so auto-resolution downgrades to rcopy instead of leaving
+	// an unusable live mount behind.
+	const handle = await ensureIsolation(cwd, name, requestedBackend, { excludeBackends: MOUNT_ONLY_BACKENDS });
 
 	const created: CreatedWorktree = {
 		name,

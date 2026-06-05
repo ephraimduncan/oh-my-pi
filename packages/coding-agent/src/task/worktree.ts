@@ -310,13 +310,20 @@ export async function ensureIsolation(
 	baseCwd: string,
 	id: string,
 	preferred?: IsoBackendKind,
+	opts?: { excludeBackends?: ReadonlySet<IsoBackendKind> },
 ): Promise<IsolationHandle> {
 	const repoRoot = await getRepoRoot(baseCwd);
 	const baseDir = getWorktreeDir(`${id}-${hashPath(repoRoot)}`);
 	const mergedDir = path.join(baseDir, "merged");
 
 	const resolution = natives.isoResolve(preferred ?? null);
-	const candidates = resolution.candidates.length > 0 ? resolution.candidates : [resolution.kind];
+	let candidates = resolution.candidates.length > 0 ? resolution.candidates : [resolution.kind];
+	if (opts?.excludeBackends) {
+		// Caller forbids some backends (e.g. --worktree rejects mount-only views);
+		// drop them and keep rcopy as the universal directory-materializing floor.
+		const filtered = candidates.filter(candidate => !opts.excludeBackends?.has(candidate));
+		candidates = filtered.length > 0 ? filtered : [IsoBackendKind.Rcopy];
+	}
 	let fallbackReason = resolution.reason ?? null;
 
 	for (const candidate of candidates) {
