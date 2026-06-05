@@ -286,6 +286,17 @@ describe("createWorktree (integration)", () => {
 	});
 });
 
+async function gitRun(repo: string, args: string[]): Promise<string> {
+	const proc = Bun.spawn(["git", ...args], { cwd: repo, stdout: "pipe", stderr: "pipe" });
+	const out = await new Response(proc.stdout).text();
+	const code = await proc.exited;
+	if (code !== 0) {
+		const err = await new Response(proc.stderr).text();
+		throw new Error(`git ${args.join(" ")} failed: ${err}`);
+	}
+	return out;
+}
+
 describe("clearWorktrees persistent worktree protection", () => {
 	const tempHomes: string[] = [];
 	let originalAgentDir: string;
@@ -327,4 +338,32 @@ describe("clearWorktrees persistent worktree protection", () => {
 		expect(wouldRemove).toContain(leftover);
 		expect(wouldRemove).not.toContain(persistent);
 	});
+
+	it("unregisters an rcopy git worktree from its parent repo when cleared with --all", async () => {
+		const wtRoot = getWorktreesDir();
+		const repo = await fs.realpath(await fs.mkdtemp(path.join(os.tmpdir(), "omp-wt-clear-repo-")));
+		tempHomes.push(repo);
+		await gitRun(repo, ["init", "-q"]);
+		await gitRun(repo, ["config", "user.email", "t@example.com"]);
+		await gitRun(repo, ["config", "user.name", "Test"]);
+		await fs.writeFile(path.join(repo, "f.txt"), "x\n");
+		await gitRun(repo, ["add", "."]);
+		await gitRun(repo, ["commit", "-qm", "init"]);
+
+		// Persistent worktree: a real registered git worktree under merged + marker.
+		const baseDir = path.join(wtRoot, "feat-cafe1234");
+		const mergedPath = path.join(baseDir, "merged");
+		await fs.mkdir(baseDir, { recursive: true });
+		await gitRun(repo, ["worktree", "add", "--detach", mergedPath, "HEAD"]);
+		await fs.writeFile(path.join(baseDir, PERSISTENT_WORKTREE_MARKER), "{}\n");
+		expect(await gitRun(repo, ["worktree", "list", "--porcelain"])).toContain(mergedPath);
+
+		const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+		await clearWorktrees({ all: true, dryRun: false, json: true });
+		logSpy.mockRestore();
+
+		// Wrapper removed AND the parent repo no longer tracks the worktree.
+		await expect(fs.stat(baseDir)).rejects.toThrow();
+		expect(await gitRun(repo, ["worktree", "list", "--porcelain"])).not.toContain(mergedPath);
+	}, 20_000);
 });

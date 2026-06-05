@@ -112,7 +112,15 @@ function reportCreatedWorktree(created: CreatedWorktree): void {
 			chalk.yellow(`  Requested backend unavailable — fell back to ${BACKEND_LABELS[backend]}${reason}\n`),
 		);
 	}
-	process.stderr.write(chalk.dim(`  Remove it later with: rm -rf ${workspacePath}\n`));
+	process.stderr.write(chalk.dim(`  Remove it later with: omp wt clear --all\n`));
+	if (backend === IsoBackendKind.Rcopy) {
+		// rcopy materialises `merged` as a git worktree; `rm -rf` removes the dir
+		// but leaves the parent repo's registration, breaking a same-name reuse
+		// until `git worktree prune`. `omp wt clear` unregisters it properly.
+		process.stderr.write(
+			chalk.dim(`  (rcopy worktree — a bare rm -rf would leave a stale git worktree registration)\n`),
+		);
+	}
 }
 
 /**

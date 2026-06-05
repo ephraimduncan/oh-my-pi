@@ -114,6 +114,15 @@ export async function clearWorktrees(options: ClearWorktreesOptions): Promise<vo
 					parentsToPrune.add(target.parentRepo);
 				}
 			} else {
+				// rcopy materialises `merged` as a registered git worktree; unregister it
+				// from the parent (best-effort, run inside the worktree like the PAL's
+				// stop does) before removing the wrapper, so a same-name reuse later does
+				// not hit a stale `.git/worktrees` entry. No-op for clone/copy backends
+				// where `merged` is a plain directory.
+				if (target.kind === "task-isolation" || target.kind === "persistent-worktree") {
+					const mergedPath = path.join(target.path, "merged");
+					await git.worktree.tryRemove(mergedPath, mergedPath, { force: true }).catch(() => false);
+				}
 				await fs.rm(target.path, { recursive: true, force: true });
 				if (target.parentRepo) parentsToPrune.add(target.parentRepo);
 			}
