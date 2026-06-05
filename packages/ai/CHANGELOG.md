@@ -8,7 +8,7 @@
 
 ### Changed
 
-- Claude Opus 4.7+ (Messages API) thinking efforts now map 1:1 to Anthropic adaptive levels instead of the previous +1 shift, and carry `defaultLevel: "xhigh"` (Anthropic's recommended coding/agentic effort) so default thinking depth is unchanged. Bedrock Opus and budget-mode models keep their existing four-tier mapping (`xhigh` aliases to `max`) ([#1731](https://github.com/can1357/oh-my-pi/pull/1731) by [@ephraimduncan](https://github.com/ephraimduncan)).
+- Claude Opus 4.7+ (Messages API) thinking efforts now map 1:1 to Anthropic adaptive levels instead of the previous +1 shift, and carry `defaultLevel: "xhigh"` (Anthropic's recommended coding/agentic effort) so default thinking depth is unchanged. Bedrock Opus and budget-mode models keep their existing four-tier mapping (`xhigh` aliases to `max`). Catalog enrichment also backfills this inferred `defaultLevel` onto discovered/proxy Opus 4.7+ models that ship the five-tier range without one (and `thinkingsEqual` now compares `defaultLevel`), so model switching and compaction use `xhigh` rather than the global default ([#1731](https://github.com/can1357/oh-my-pi/pull/1731) by [@ephraimduncan](https://github.com/ephraimduncan)).
 ## [15.9.1] - 2026-06-04
 
 ### Added

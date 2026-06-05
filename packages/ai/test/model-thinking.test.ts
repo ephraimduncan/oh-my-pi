@@ -143,6 +143,31 @@ describe("model thinking metadata", () => {
 		expect(mapEffortToAnthropicAdaptiveEffort(opus47Bedrock, Effort.XHigh)).toBe("max");
 		expect(() => mapEffortToAnthropicAdaptiveEffort(sonnet46, Effort.XHigh)).toThrow(/not supported/);
 	});
+
+	it("backfills the inferred default level for an Opus 4.7+ model shipping a partial thinking config", () => {
+		// A discovered/proxy Opus 4.7+ model can declare the low..max range without a
+		// defaultLevel. Enrichment must still surface the inferred xhigh default so
+		// model switching and compaction use the intended depth, not the global one.
+		const model = enrichModelThinking({
+			id: "claude-opus-4-7",
+			name: "claude-opus-4-7",
+			api: "anthropic-messages",
+			provider: "anthropic",
+			baseUrl: "",
+			reasoning: true,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 200000,
+			maxTokens: 32000,
+			thinking: { mode: "anthropic-adaptive", minLevel: Effort.Low, maxLevel: Effort.Max },
+		});
+		expect(model.thinking).toEqual({
+			mode: "anthropic-adaptive",
+			minLevel: Effort.Low,
+			maxLevel: Effort.Max,
+			defaultLevel: Effort.XHigh,
+		});
+	});
 });
 
 describe("generated model policies", () => {

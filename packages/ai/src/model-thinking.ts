@@ -134,7 +134,17 @@ export function enrichModelThinking<TApi extends Api>(model: ApiModel<TApi>): Ap
 		result =
 			normalizedThinking === undefined && model.thinking === undefined ? model : { ...model, thinking: undefined };
 	} else {
-		const thinking = normalizedThinking ?? inferModelThinking(model);
+		let thinking = normalizedThinking ?? inferModelThinking(model);
+		// A model may ship a partial thinking config (range/mode without a default
+		// level). Backfill the inferred default — e.g. Opus 4.7+ Messages xhigh — so
+		// runtime model switching and compaction use the intended out-of-box depth
+		// instead of the global default. Only applies when the model omits one.
+		if (normalizedThinking && normalizedThinking.defaultLevel === undefined) {
+			const inferredDefault = tryInferDefaultLevel(model);
+			if (inferredDefault !== undefined) {
+				thinking = { ...normalizedThinking, defaultLevel: inferredDefault };
+			}
+		}
 		result = thinkingsEqual(normalizedThinking, thinking) ? model : { ...model, thinking };
 	}
 	// Stash the enriched copy on a non-enumerable slot so callers that hand us
@@ -563,6 +573,21 @@ function inferModelThinking<TApi extends Api>(model: ApiModel<TApi>): ThinkingCo
 	return config;
 }
 
+/**
+ * Inferred default thinking level for `model`, or `undefined` when none applies
+ * or the id is not inferrable. Backfills a partial catalog/proxy thinking config
+ * that supplies a range but omits `defaultLevel` (e.g. an Opus 4.7+ proxy that
+ * should default to xhigh). Inference parses the model id and can throw for
+ * unrecognized proxy ids, so failures degrade to `undefined`.
+ */
+function tryInferDefaultLevel<TApi extends Api>(model: ApiModel<TApi>): Effort | undefined {
+	try {
+		return inferModelThinking(model).defaultLevel;
+	} catch {
+		return undefined;
+	}
+}
+
 function normalizeThinkingConfig(thinking: ThinkingConfig | undefined): ThinkingConfig | undefined {
 	if (!thinking || expandEffortRange(thinking).length === 0) {
 		return undefined;
@@ -573,7 +598,14 @@ function normalizeThinkingConfig(thinking: ThinkingConfig | undefined): Thinking
 function thinkingsEqual(left: ThinkingConfig | undefined, right: ThinkingConfig | undefined): boolean {
 	if (left === right) return true;
 	if (!left || !right) return false;
-	if (left.mode !== right.mode || left.minLevel !== right.minLevel || left.maxLevel !== right.maxLevel) return false;
+	if (
+		left.mode !== right.mode ||
+		left.minLevel !== right.minLevel ||
+		left.maxLevel !== right.maxLevel ||
+		left.defaultLevel !== right.defaultLevel
+	) {
+		return false;
+	}
 	const leftLevels = left.levels;
 	const rightLevels = right.levels;
 	if (leftLevels === rightLevels) return true;
