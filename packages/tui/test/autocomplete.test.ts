@@ -310,15 +310,24 @@ describe("inline slash command completion", () => {
 		expect(result!.items.map(i => i.value)).toEqual(["skill:cleanup"]);
 	});
 
-	it("offers inline-eligible skills (by name prefix) but not control commands mid-line", async () => {
+	it("offers inline-eligible skills (by namespace prefix) but not control commands mid-line", async () => {
 		const provider = new CombinedAutocompleteProvider(commands, "/tmp");
-		const line = "do /s"; // prefix of "skill:*" and of the non-inline "status"
+		const line = "do /skill:"; // full namespace prefix → inline skill completion
 		const result = await provider.getSuggestions([line], 0, line.length);
 		expect(result).not.toBeNull();
 		const values = result!.items.map(i => i.value);
 		expect(values).toContain("skill:cleanup");
 		expect(values).toContain("skill:deploy");
-		expect(values).not.toContain("status"); // matches the prefix but is not inlineEligible
+		expect(values).not.toContain("status"); // not inlineEligible
+	});
+
+	it("lets a path-like short token (/s) fall through instead of matching skill:* inline", async () => {
+		const provider = new CombinedAutocompleteProvider(commands, "/tmp");
+		// "/s" is a prefix of "skill:*" but also the start of an absolute path
+		// (`open /s...`); inline skill completion must require the "skill:" prefix so
+		// the token falls through to path completion rather than shadowing it.
+		const result = await provider.getSuggestions(["open /s"], 0, "open /s".length);
+		expect(result?.items.some(i => i.value.startsWith("skill:")) ?? false).toBe(false);
 	});
 
 	it("matches inline tokens by name prefix, not fuzzily, so path-like tokens fall through", async () => {

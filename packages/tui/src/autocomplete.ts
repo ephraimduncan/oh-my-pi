@@ -314,7 +314,14 @@ export class CombinedAutocompleteProvider implements AutocompleteProvider {
 			}
 			const inlinePool = this.#commands.filter(cmd => {
 				if (!("inlineEligible" in cmd) || !cmd.inlineEligible) return false;
-				return cmd.name.toLowerCase().startsWith(lowerPrefix);
+				const name = cmd.name.toLowerCase();
+				// Inline references must include the command's namespace prefix (e.g.
+				// "skill:") before name completion engages, so a path-like short token
+				// ("/s", "/sk", or a bare "/") never shadows the file-path completion
+				// below by matching every `skill:*` command.
+				const colonIdx = name.indexOf(":");
+				const namespace = colonIdx === -1 ? name : name.slice(0, colonIdx + 1);
+				return lowerPrefix.startsWith(namespace) && name.startsWith(lowerPrefix);
 			});
 			if (inlinePool.length > 0) {
 				return { items: this.#matchCommandNames(inlinePool, lowerPrefix), prefix: slashToken.token };

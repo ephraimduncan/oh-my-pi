@@ -4,7 +4,7 @@
 
 ### Added
 
-- Added inline slash-command completion. `CombinedAutocompleteProvider` and `Editor` now complete `/command` tokens at any whitespace boundary, not only the leading token, gated by a new optional `SlashCommand.inlineEligible` flag so hosts can offer several inline command/skill references in one message. Absolute-path completion and leading-command behavior are unchanged; completing an inline reference applies the token without submitting the message. ([#1858](https://github.com/can1357/oh-my-pi/pull/1858) by [@ephraimduncan](https://github.com/ephraimduncan))
+- Added inline slash-command completion. `CombinedAutocompleteProvider` and `Editor` now complete `/command` tokens at any whitespace boundary, not only the leading token, gated by a new optional `SlashCommand.inlineEligible` flag so hosts can offer several inline command/skill references in one message. Inline completion engages only once the token carries the command's namespace prefix (e.g. `/skill:`), so a path-like short token such as `open /s` falls through to file-path completion instead of matching every `skill:*` command. Absolute-path completion and leading-command behavior are unchanged; completing an inline reference applies the token without submitting the message. ([#1858](https://github.com/can1357/oh-my-pi/pull/1858) by [@ephraimduncan](https://github.com/ephraimduncan))
 
 ## [15.9.1] - 2026-06-04
 
