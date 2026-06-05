@@ -5,6 +5,10 @@
 ### Added
 
 - The thinking-level picker now offers a `max` level for Claude Opus 4.7+, surfacing Anthropic's top adaptive effort (matching Claude Code). `ultrathink` prompts resolve to the model's genuine highest supported tier (`max` where available) ([#1731](https://github.com/can1357/oh-my-pi/pull/1731) by [@ephraimduncan](https://github.com/ephraimduncan)).
+
+### Fixed
+
+- Fixed model selectors whose id legitimately ends in a thinking-like suffix (e.g. the bundled `nanogpt/coding-router:max` / `:high` route variants) being mis-parsed once `:max` joined the thinking levels: `parseModelString` no longer strips the suffix when the full `provider/id` is a known bundled model, so session restore and `--model` resolve the real model instead of a non-existent base id ([#1731](https://github.com/can1357/oh-my-pi/pull/1731) by [@ephraimduncan](https://github.com/ephraimduncan)).
 ## [15.9.1] - 2026-06-04
 
 ### Added

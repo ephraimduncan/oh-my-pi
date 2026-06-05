@@ -12,6 +12,7 @@ import {
 	type Model,
 	modelsAreEqual,
 } from "@oh-my-pi/pi-ai";
+import { type GeneratedProvider, getBundledModel } from "@oh-my-pi/pi-ai/models";
 import { fuzzyMatch } from "@oh-my-pi/pi-tui";
 import { logger } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
@@ -40,12 +41,15 @@ export function parseModelString(
 	if (slashIdx <= 0) return undefined;
 	const id = modelStr.slice(slashIdx + 1);
 	const provider = modelStr.slice(0, slashIdx);
-	// Strip valid thinking level suffix (e.g., "claude-sonnet-4-6:high" -> id "claude-sonnet-4-6", thinkingLevel "high")
+	// Strip a valid thinking-level suffix (e.g. "claude-sonnet-4-6:high"). Skip this
+	// when the full id is itself a known bundled model whose id ends in a
+	// thinking-like token (e.g. "nanogpt/nanogpt/coding-router:max"), so the new
+	// `:max` tier does not shadow a real ":max" model id.
 	const colonIdx = id.lastIndexOf(":");
 	if (colonIdx !== -1) {
 		const suffix = id.slice(colonIdx + 1);
 		const thinkingLevel = parseThinkingLevel(suffix);
-		if (thinkingLevel) {
+		if (thinkingLevel && !getBundledModel(provider as GeneratedProvider, id)) {
 			return { provider, id: id.slice(0, colonIdx), thinkingLevel };
 		}
 	}

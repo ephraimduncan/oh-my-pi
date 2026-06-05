@@ -904,6 +904,18 @@ describe("parseModelString", () => {
 			// Empty string is not a valid thinking level, so colon stays as part of ID
 			expect(result).toEqual({ provider: "anthropic", id: "claude-sonnet-4-5:" });
 		});
+
+		test("keeps a colon suffix that is part of a real bundled model id (nanogpt :max route)", () => {
+			// nanogpt/coding-router:max is a bundled route variant — the `:max` is the
+			// model id, not the new max thinking tier, so it must not be stripped.
+			const result = parseModelString("nanogpt/nanogpt/coding-router:max");
+			expect(result).toEqual({ provider: "nanogpt", id: "nanogpt/coding-router:max" });
+		});
+
+		test("still strips a :max thinking suffix when the full id is not a bundled model", () => {
+			const result = parseModelString("anthropic/claude-opus-4-7:max");
+			expect(result).toEqual({ provider: "anthropic", id: "claude-opus-4-7", thinkingLevel: Effort.Max });
+		});
 	});
 });
 
