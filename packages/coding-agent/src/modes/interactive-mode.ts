@@ -28,6 +28,8 @@ import {
 	Markdown,
 	ProcessTerminal,
 	Spacer,
+	setTerminalTextSizing,
+	TERMINAL,
 	Text,
 	TUI,
 	visibleWidth,
@@ -84,7 +86,7 @@ import type { LspStartupServerInfo } from "../tools";
 import { normalizeLocalScheme } from "../tools/path-utils";
 import { setAutoQaConsentHandler } from "../tools/report-tool-issue";
 import { type ResolveToolDetails, runResolveInvocation } from "../tools/resolve";
-import { formatPhaseDisplayName, selectStickyTodoWindow, todoMatchesAnyDescription } from "../tools/todo-write";
+import { formatPhaseDisplayName, selectStickyTodoWindow, todoMatchesAnyDescription } from "../tools/todo";
 import { ToolError } from "../tools/tool-errors";
 import type { EventBus } from "../utils/event-bus";
 import { getEditorCommand, openInEditor } from "../utils/external-editor";
@@ -100,6 +102,7 @@ import type { HookInputComponent } from "./components/hook-input";
 import type { HookSelectorComponent, HookSelectorSlider } from "./components/hook-selector";
 import { StatusLineComponent } from "./components/status-line";
 import type { ToolExecutionHandle } from "./components/tool-execution";
+import { TranscriptContainer } from "./components/transcript-container";
 import { WelcomeComponent, type LspServerInfo as WelcomeLspServerInfo } from "./components/welcome";
 import { BtwController } from "./controllers/btw-controller";
 import { CommandController } from "./controllers/command-controller";
@@ -255,7 +258,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	historyStorage?: HistoryStorage;
 
 	ui: TUI;
-	chatContainer: Container;
+	chatContainer: TranscriptContainer;
 	pendingMessagesContainer: Container;
 	statusContainer: Container;
 	todoContainer: Container;
@@ -390,7 +393,12 @@ export class InteractiveMode implements InteractiveModeContext {
 
 		this.ui = new TUI(new ProcessTerminal(), settings.get("showHardwareCursor"));
 		this.ui.setClearOnShrink(settings.get("clearOnShrink"));
-		this.chatContainer = new Container();
+		this.ui.setMaxInlineImages(settings.get("tui.maxInlineImages"));
+		// OSC 66 text-sizing is Kitty-only; resolve the setting against the terminal's
+		// capability (`TERMINAL.textSizing` defaults on for Kitty) so it stays off
+		// unless the user opts in, and never emits raw escapes on other terminals.
+		setTerminalTextSizing(settings.get("tui.textSizing") && TERMINAL.textSizing);
+		this.chatContainer = new TranscriptContainer();
 		this.pendingMessagesContainer = new Container();
 		this.statusContainer = new Container();
 		this.todoContainer = new Container();
@@ -599,7 +607,8 @@ export class InteractiveMode implements InteractiveModeContext {
 		await this.initHooksAndCustomTools();
 
 		// Restore mode from session (e.g. plan mode on resume)
-		await this.#restoreModeFromSession();
+		this.session.setSessionSwitchReconciler?.(() => this.#reconcileModeFromSession());
+		await this.#reconcileModeFromSession();
 
 		// Restore unsent editor draft from previous session shutdown (Ctrl+D).
 		// One-shot: consumeDraft removes the sidecar after read so the next
@@ -915,6 +924,10 @@ export class InteractiveMode implements InteractiveModeContext {
 			this.#pendingSubmissionDispose = undefined;
 		}
 		this.editor.setText("");
+		// Reconciliation checkpoint: the rebuild below replays the whole transcript
+		// into native scrollback, so retire frozen block snapshots and let every
+		// block render its current state.
+		this.chatContainer.thaw();
 		this.ui.refreshNativeScrollbackIfDirty({ allowUnknownViewport: true });
 		this.ensureLoadingAnimation();
 		this.ui.requestRender();
@@ -1001,7 +1014,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		} else {
 			const accentEnabled = !isSettingsInitialized() || settings.get("statusLine.sessionAccent") !== false;
 			const sessionName = accentEnabled ? this.sessionManager.getSessionName() : undefined;
-			const hex = sessionName ? getSessionAccentHex(sessionName) : undefined;
+			const hex = sessionName ? getSessionAccentHex(sessionName, theme.accentSurfaceLuminance) : undefined;
 			const ansi = getSessionAccentAnsi(hex);
 			if (ansi) {
 				this.editor.borderColor = (str: string) => `${ansi}${str}\x1b[39m`;
@@ -1060,7 +1073,7 @@ export class InteractiveMode implements InteractiveModeContext {
 	 * Auto-complete any pending/in_progress todo whose content matches a
 	 * subagent that has finished successfully. Fires on every observer
 	 * `onChange` so the visual state stays in sync with subagent lifecycle
-	 * without requiring the agent to issue a follow-up `todo_write`. Failed
+	 * without requiring the agent to issue a follow-up `todo`. Failed
 	 * and aborted subagents are intentionally NOT auto-completed — those
 	 * stay open so the user (or the next agent turn) can decide what to do.
 	 *
@@ -1358,8 +1371,42 @@ export class InteractiveMode implements InteractiveModeContext {
 		}
 	}
 
-	/** Restore mode state from session entries on resume (e.g. plan mode). */
-	async #restoreModeFromSession(): Promise<void> {
+	async #clearTransientModeState(): Promise<void> {
+		if (this.planModeEnabled || this.planModePaused) {
+			if (this.#planModePreviousTools !== undefined) {
+				await this.session.setActiveToolsByName(this.#planModePreviousTools);
+			}
+			this.session.setStandingResolveHandler?.(null);
+			this.session.setPlanModeState(undefined);
+			this.planModeEnabled = false;
+			this.planModePaused = false;
+			this.planModePlanFilePath = undefined;
+			this.#planModePreviousTools = undefined;
+			this.#planModePreviousModelState = undefined;
+			this.#pendingModelSwitch = undefined;
+			this.#planModeHasEntered = false;
+			this.#updatePlanModeStatus();
+		}
+
+		if (this.goalModeEnabled || this.goalModePaused) {
+			if (this.#goalModePreviousTools !== undefined) {
+				await this.session.setActiveToolsByName(this.#goalModePreviousTools);
+			}
+			this.session.setGoalModeState(undefined);
+			this.goalModeEnabled = false;
+			this.goalModePaused = false;
+			this.#goalModePreviousTools = undefined;
+			this.#goalTurnHadToolCalls = false;
+			this.#goalContinuationTurnInFlight = false;
+			this.#goalSuppressNextContinuation = false;
+			this.#cancelGoalContinuation();
+			this.#updateGoalModeStatus();
+		}
+	}
+
+	/** Reconcile mode state from session entries on resume/switch. */
+	async #reconcileModeFromSession(): Promise<void> {
+		await this.#clearTransientModeState();
 		const sessionContext = this.sessionManager.buildSessionContext();
 		const goalEnabled = this.session.settings.get("goal.enabled");
 		if (!goalEnabled && (sessionContext.mode === "goal" || sessionContext.mode === "goal_paused")) {
@@ -2495,7 +2542,7 @@ export class InteractiveMode implements InteractiveModeContext {
 		const accentEnabled = !isSettingsInitialized() || settings.get("statusLine.sessionAccent") !== false;
 		const sessionName = accentEnabled ? this.sessionManager.getSessionName() : undefined;
 		if (!sessionName) return undefined;
-		const hex = getSessionAccentHex(sessionName);
+		const hex = getSessionAccentHex(sessionName, theme.accentSurfaceLuminance);
 		const main = getSessionAccentAnsi(hex);
 		const dim = getSessionAccentAnsi(adjustHsv(hex, { s: 0.55, v: 0.65 }));
 		return main && dim ? { main, dim } : undefined;

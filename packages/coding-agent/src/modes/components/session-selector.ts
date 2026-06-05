@@ -14,10 +14,33 @@ import {
 import { formatBytes } from "@oh-my-pi/pi-utils";
 import { theme } from "../../modes/theme/theme";
 import { matchesAppInterrupt, matchesSelectDown, matchesSelectUp } from "../../modes/utils/keybinding-matchers";
-import type { SessionInfo } from "../../session/session-manager";
+import type { SessionInfo, SessionStatus } from "../../session/session-manager";
 import { shortenPath } from "../../tools/render-utils";
 import { DynamicBorder } from "./dynamic-border";
 import { HookSelectorComponent } from "./hook-selector";
+
+/**
+ * Themed glyph + colored label for a session's lifecycle status, or `undefined`
+ * when there is nothing useful to show (`unknown`/unset) so the metadata line
+ * stays uncluttered. The glyph resolves through the active symbol preset
+ * (nerdfont / unicode / ascii) via `theme.status.*`.
+ */
+function formatSessionStatus(status: SessionStatus | undefined): string | undefined {
+	switch (status) {
+		case "complete":
+			return theme.fg("success", `${theme.status.success} done`);
+		case "interrupted":
+			return theme.fg("warning", `${theme.status.warning} interrupted`);
+		case "aborted":
+			return theme.fg("muted", `${theme.status.aborted} aborted`);
+		case "error":
+			return theme.fg("error", `${theme.status.error} error`);
+		case "pending":
+			return theme.fg("accent", `${theme.status.pending} pending`);
+		default:
+			return undefined;
+	}
+}
 
 /** Returns the IDs of sessions whose recorded prompts match a query, best first. */
 export type SessionHistoryMatcher = (query: string) => string[];
@@ -28,10 +51,10 @@ export type SessionHistoryMatcher = (query: string) => string[];
  *
  * - `fuzzy` is the ordered fuzzy-filter result over session metadata (best first).
  * - `historyIds` are session IDs whose recorded prompts matched the query,
- *   ordered by history relevance (best first); duplicates are tolerated.
+ *   ordered by prompt-history rank (typically newest matching prompt first); duplicates are tolerated.
  *
  * Ranking: sessions matched by **both** signals lead (keeping fuzzy order), then
- * fuzzy-only matches, then history-only matches (by history order). A fuzzy match
+ * fuzzy-only matches, then history-only matches (by prompt-history order). A fuzzy match
  * is never dropped, and history matches not present in `allSessions` (e.g. deleted
  * or out-of-scope sessions) are ignored since they cannot be resumed from here.
  */
@@ -72,7 +95,9 @@ class SessionList implements Component {
 	onCancel?: () => void;
 	onExit: () => void = () => {};
 	onToggleScope?: () => void;
-	#maxVisible: number = 5; // Max sessions visible (each session is 3 lines: msg + metadata + blank)
+	// Snapshot of the live terminal-row getter; the visible window is derived
+	// from it per render so the picker fits the viewport (and adapts to resize).
+	readonly #getTerminalRows: () => number;
 
 	onDeleteRequest?: (session: SessionInfo) => void;
 
@@ -80,7 +105,13 @@ class SessionList implements Component {
 	#showCwd: boolean;
 	readonly #historyMatcher?: SessionHistoryMatcher;
 
-	constructor(sessions: SessionInfo[], showCwd = false, historyMatcher?: SessionHistoryMatcher) {
+	constructor(
+		sessions: SessionInfo[],
+		showCwd = false,
+		historyMatcher?: SessionHistoryMatcher,
+		getTerminalRows: () => number = () => 24,
+	) {
+		this.#getTerminalRows = getTerminalRows;
 		this.#allSessions = sessions;
 		this.#showCwd = showCwd;
 		this.#historyMatcher = historyMatcher;
@@ -94,6 +125,25 @@ class SessionList implements Component {
 				this.onSelect?.(selected);
 			}
 		};
+	}
+
+	/**
+	 * Number of sessions to show at once, sized so the whole picker fits the
+	 * current viewport instead of pushing its header/search off the top.
+	 *
+	 * Budget = rows − chrome − reserve, divided by the worst-case per-session
+	 * height. Chrome (12) is the surrounding spacers/borders/header (7) plus the
+	 * list's search line, blank, scroll indicator, blank, and hint (5). A titled
+	 * session is the tallest item at 4 lines (title + preview + metadata +
+	 * blank); budgeting for that guarantees no overflow even when every visible
+	 * entry has a title. The reserve covers below-editor hook widgets / cursor.
+	 */
+	#visibleCount(): number {
+		const CHROME = 12;
+		const PER_SESSION = 4;
+		const RESERVE = 1;
+		const budget = this.#getTerminalRows() - CHROME - RESERVE;
+		return Math.max(2, Math.floor(budget / PER_SESSION));
 	}
 
 	/** Replace the visible dataset, e.g. when toggling folder/all-projects scope. */
@@ -187,17 +237,16 @@ class SessionList implements Component {
 			return date.toLocaleDateString();
 		};
 
-		// Calculate visible range with scrolling
+		// Calculate visible range with scrolling. The window is sized to the
+		// current viewport so the picker never overflows past the top.
+		const maxVisible = this.#visibleCount();
 		const startIndex = Math.max(
 			0,
-			Math.min(
-				this.#selectedIndex - Math.floor(this.#maxVisible / 2),
-				this.#filteredSessions.length - this.#maxVisible,
-			),
+			Math.min(this.#selectedIndex - Math.floor(maxVisible / 2), this.#filteredSessions.length - maxVisible),
 		);
-		const endIndex = Math.min(startIndex + this.#maxVisible, this.#filteredSessions.length);
+		const endIndex = Math.min(startIndex + maxVisible, this.#filteredSessions.length);
 
-		// Render visible sessions (2-3 lines per session + blank line)
+		// Render visible sessions (3 lines, or 4 when a title adds a preview line).
 		for (let i = startIndex; i < endIndex; i++) {
 			const session = this.#filteredSessions[i];
 			const isSelected = i === this.#selectedIndex;
@@ -227,13 +276,21 @@ class SessionList implements Component {
 				lines.push(messageLine);
 			}
 
-			// Metadata line: date + file size (+ project dir in all-projects scope)
+			// Metadata line: date + file size + lifecycle status (+ project dir in
+			// all-projects scope). The status segment carries its own color, so each
+			// segment is dimmed individually rather than wrapping the whole line.
+			const dim = (s: string) => theme.fg("dim", s);
+			const dot = dim(theme.sep.dot);
 			const modified = formatDate(session.modified);
-			let metadata = `  ${modified} ${theme.sep.dot} ${formatBytes(session.size)}`;
-			if (this.#showCwd && session.cwd) {
-				metadata += ` ${theme.sep.dot} ${shortenPath(session.cwd)}`;
+			let metadata = `  ${dim(modified)} ${dot} ${dim(formatBytes(session.size))}`;
+			const status = formatSessionStatus(session.status);
+			if (status) {
+				metadata += ` ${dot} ${status}`;
 			}
-			const metadataLine = theme.fg("dim", truncateToWidth(metadata, width));
+			if (this.#showCwd && session.cwd) {
+				metadata += ` ${dot} ${dim(shortenPath(session.cwd))}`;
+			}
+			const metadataLine = truncateToWidth(metadata, width);
 
 			lines.push(metadataLine);
 			lines.push(""); // Blank line between sessions
@@ -280,12 +337,12 @@ class SessionList implements Component {
 		}
 		// Page up - jump up by maxVisible items
 		if (matchesKey(keyData, "pageUp")) {
-			this.#selectedIndex = Math.max(0, this.#selectedIndex - this.#maxVisible);
+			this.#selectedIndex = Math.max(0, this.#selectedIndex - this.#visibleCount());
 			return;
 		}
 		// Page down - jump down by maxVisible items
 		if (matchesKey(keyData, "pageDown")) {
-			this.#selectedIndex = Math.min(this.#filteredSessions.length - 1, this.#selectedIndex + this.#maxVisible);
+			this.#selectedIndex = Math.min(this.#filteredSessions.length - 1, this.#selectedIndex + this.#visibleCount());
 			return;
 		}
 		// Enter
@@ -328,6 +385,11 @@ export interface SessionSelectorOptions {
 	allSessions?: SessionInfo[];
 	/** Open directly in all-projects scope (e.g. the current folder has no sessions). */
 	startInAllScope?: boolean;
+	/**
+	 * Reads the live terminal height so the visible window fits the viewport.
+	 * Omitted only in tests; defaults to a conservative 24 rows.
+	 */
+	getTerminalRows?: () => number;
 }
 
 /**
@@ -374,7 +436,7 @@ export class SessionSelectorComponent extends Container {
 		this.addChild(new Spacer(1));
 		this.addChild(this.#messageContainer);
 		// Create session list
-		this.#sessionList = new SessionList(initialSessions, startAll, options.historyMatcher);
+		this.#sessionList = new SessionList(initialSessions, startAll, options.historyMatcher, options.getTerminalRows);
 		this.#sessionList.onSelect = onSelect;
 		this.#sessionList.onCancel = onCancel;
 		this.#sessionList.onExit = onExit;
