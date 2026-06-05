@@ -1,4 +1,5 @@
 import * as fs from "node:fs/promises";
+import type { ImageContent } from "@oh-my-pi/pi-ai";
 import type { AutocompleteProvider, SlashCommand } from "@oh-my-pi/pi-tui";
 import { $env, sanitizeText } from "@oh-my-pi/pi-utils";
 import { getRoleInfo } from "../../config/model-registry";
@@ -310,7 +311,7 @@ export class InputController {
 			// free-text Enter semantics applied a few lines below at the streaming
 			// branch). Ctrl+Enter routes through `handleFollowUp` and dispatches the
 			// same helper with `"followUp"`.
-			if (await this.#invokeSkillCommands(text, "steer")) {
+			if (await this.#invokeSkillCommands(text, inputImages, "steer")) {
 				return;
 			}
 
@@ -572,7 +573,11 @@ export class InputController {
 	 * falls through to plain-text handling with the editor untouched.
 	 * `streamingBehavior` is only consulted while the agent is streaming.
 	 */
-	async #invokeSkillCommands(text: string, streamingBehavior: "steer" | "followUp"): Promise<boolean> {
+	async #invokeSkillCommands(
+		text: string,
+		images: ImageContent[] | undefined,
+		streamingBehavior: "steer" | "followUp",
+	): Promise<boolean> {
 		// Explicit bash (`!`) and Python (`$`) command modes own the whole input and
 		// are handled after this call, so a `/skill:` token inside such a command
 		// (e.g. `! echo /skill:foo`, `$ print("/skill:foo")`) must not be hijacked as
@@ -583,17 +588,17 @@ export class InputController {
 		if (refs.length === 0) return false;
 		this.ctx.editor.addToHistory(text);
 		this.ctx.editor.setText("");
-		// Forward any pending clipboard/file images alongside the skill prompt and
-		// clear them, so an inline `/skill:` reference in image-bearing prose does
-		// not silently drop the images the normal submit path would otherwise send.
-		const images = this.ctx.pendingImages.length > 0 ? [...this.ctx.pendingImages] : undefined;
+		// `images` is the caller-resolved set to send alongside the skill prompt —
+		// post input-extension on the submit path, so an extension that rewrote or
+		// added images is honored instead of the stale clipboard buffer. Clear
+		// pendingImages so those consumed chips do not re-attach to the next draft.
 		this.ctx.pendingImages = [];
 		try {
 			const { message, details } = await this.#buildSkillInvocation(text, refs);
 			// Images ride in the custom-message content array; the chip display only
 			// renders the text parts (SkillMessageComponent#extractText), and both the
 			// streaming and non-streaming dispatch paths forward image content.
-			const content = images ? [{ type: "text" as const, text: message }, ...images] : message;
+			const content = images && images.length > 0 ? [{ type: "text" as const, text: message }, ...images] : message;
 			// When the agent is streaming, register the compact typed text as the
 			// pending-display twin BEFORE dispatching the CustomMessage so
 			// AgentSession.#handleAgentEvent can remove the matching display entry
@@ -641,7 +646,13 @@ export class InputController {
 		// Skill commands invoke through the custom-message path regardless of
 		// which keybinding submitted them. Enter routes them as `steer`;
 		// Ctrl+Enter (this handler) routes them as `followUp`.
-		if (await this.#invokeSkillCommands(text, "followUp")) {
+		if (
+			await this.#invokeSkillCommands(
+				text,
+				this.ctx.pendingImages.length > 0 ? [...this.ctx.pendingImages] : undefined,
+				"followUp",
+			)
+		) {
 			return;
 		}
 

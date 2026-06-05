@@ -56,7 +56,12 @@ type StubEditor = {
 	onSubmit?: (text: string) => Promise<void>;
 };
 
-function createStubInputControllerContext(opts: { skillCommands: Map<string, string>; isStreaming: boolean }) {
+function createStubInputControllerContext(opts: {
+	skillCommands: Map<string, string>;
+	isStreaming: boolean;
+	pendingImages?: InteractiveModeContext["pendingImages"];
+	extensionRunner?: unknown;
+}) {
 	let editorText = "";
 	const editor: StubEditor = {
 		setText(text) {
@@ -84,7 +89,7 @@ function createStubInputControllerContext(opts: { skillCommands: Map<string, str
 			isCompacting: false,
 			isBashRunning: false,
 			isEvalRunning: false,
-			extensionRunner: undefined,
+			extensionRunner: opts.extensionRunner,
 			enqueueCustomMessageDisplay,
 			promptCustomMessage,
 		},
@@ -94,7 +99,7 @@ function createStubInputControllerContext(opts: { skillCommands: Map<string, str
 		// Defaults that InputController touches on submit but don't matter here.
 		isBashMode: false,
 		isPythonMode: false,
-		pendingImages: [],
+		pendingImages: opts.pendingImages ?? [],
 		isBackgrounded: false,
 		loopModeEnabled: false,
 		compactionQueuedMessages: [],
@@ -242,6 +247,36 @@ describe("InputController multi-skill references", () => {
 
 		const messageArg = promptCustomMessage.mock.calls[0]![0] as unknown as { details: SkillPromptDetails };
 		expect(messageArg.details.skills?.map(s => s.name)).toEqual(["alpha", "beta"]);
+	});
+
+	it("forwards extension-updated images instead of the stale clipboard buffer", async () => {
+		// An input extension can rewrite the image array before submission. The
+		// skill path must dispatch those post-extension images, not re-read the
+		// original pendingImages (Codex P2).
+		const original = { type: "image" as const, data: "ORIGINAL", mimeType: "image/png" };
+		const updated = { type: "image" as const, data: "EXTENSION", mimeType: "image/png" };
+		const emitInput = vi.fn(async () => ({ handled: false, images: [updated] }));
+		const { ctx, editor, promptCustomMessage } = createStubInputControllerContext({
+			skillCommands,
+			isStreaming: false,
+			pendingImages: [original],
+			extensionRunner: { hasHandlers: (kind: string) => kind === "input", emitInput },
+		});
+		const controller = new InputController(ctx);
+		controller.setupEditorSubmitHandler();
+		const text = "analyze this /skill:alpha";
+		editor.setText(text);
+		await editor.onSubmit?.(text);
+
+		expect(emitInput).toHaveBeenCalledTimes(1);
+		expect(promptCustomMessage).toHaveBeenCalledTimes(1);
+		const message = promptCustomMessage.mock.calls[0]![0] as unknown as {
+			content: Array<{ type: string; data?: string }>;
+		};
+		const images = message.content.filter(part => part.type === "image");
+		expect(images).toEqual([updated]);
+		// The consumed clipboard buffer is cleared so it cannot re-attach.
+		expect(ctx.pendingImages).toEqual([]);
 	});
 
 	it("does not consume a /skill: reference inside a fenced code block", async () => {
