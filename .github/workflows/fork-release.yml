@@ -1,0 +1,111 @@
+# Fork-only release pipeline (ephraimduncan/oh-my-pi).
+#
+# Upstream's ci.yml builds release binaries on the self-hosted `omp-kata`
+# runner and publishes to npm + Homebrew — none of which this fork can use.
+# This standalone workflow builds the same `omp-<platform>-<arch>` binaries on
+# GitHub-hosted runners and attaches them to a GitHub Release on THIS repo, so
+# `scripts/install.sh` (curl | sh) can fetch them. No npm, no self-hosted
+# runner, no upstream secrets.
+#
+# Cut a release: push a `v*` tag (e.g. `git tag v16.1.16 && git push origin
+# v16.1.16`), or run this workflow manually from a tag via the Actions tab.
+#
+# Kept as a separate file (not edits to ci.yml) so upstream merges never
+# conflict here.
+name: Fork Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish (e.g. v16.1.16). Defaults to the ref this run was dispatched from."
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: "Build binary: ${{ matrix.target_id }}"
+    runs-on: ${{ matrix.os }}
+    strategy:
+      # One platform failing must not block the others — the user's own
+      # platform (darwin-arm64) still releases even if a Linux leg breaks.
+      fail-fast: false
+      matrix:
+        include:
+          - { os: macos-14, platform: darwin, arch: arm64, target_id: darwin-arm64, binary_path: packages/coding-agent/binaries/omp-darwin-arm64 }
+          - { os: macos-15-intel, platform: darwin, arch: x64, target_id: darwin-x64, binary_path: packages/coding-agent/binaries/omp-darwin-x64 }
+          - { os: ubuntu-22.04, platform: linux, arch: x64, target_id: linux-x64, binary_path: packages/coding-agent/binaries/omp-linux-x64 }
+          - { os: ubuntu-24.04-arm, platform: linux, arch: arm64, target_id: linux-arm64, binary_path: packages/coding-agent/binaries/omp-linux-arm64 }
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: "1.3"
+        # Disable the self-hosted sccache/S3 wiring baked into the repo env so a
+        # stock GitHub runner doesn't try to reach can.internal infra.
+        env:
+          SCCACHE_BUCKET: ""
+          AWS_ACCESS_KEY_ID: ""
+      - uses: ./.github/actions/ensure-rust-toolchain
+        with:
+          toolchain: nightly-2026-04-29
+      # Canvas/fd/ripgrep/imagemagick runtime deps for the --smoke-test below.
+      # apt-based, so Linux only (the action self-skips when already present).
+      - name: Install system deps (Linux)
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/setup-system-deps
+      - name: Cache bun dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('**/bun.lock') }}
+      - run: bun install --frozen-lockfile
+      # Build the host native addon, then bundle + compile the standalone
+      # binary for the host target (host == matrix target on each runner).
+      - name: Build native addon
+        run: bun run build:native
+      - name: Build release binary
+        env:
+          RELEASE_TARGETS: ${{ matrix.target_id }}
+        run: bun run ci:release:build-binaries
+      - name: Smoke test binary
+        run: |
+          runtime_dir="$(mktemp -d)"
+          HOME="$runtime_dir/home" XDG_DATA_HOME="$runtime_dir/xdg" "${{ matrix.binary_path }}" --version
+          HOME="$runtime_dir/home" XDG_DATA_HOME="$runtime_dir/xdg" "${{ matrix.binary_path }}" --smoke-test
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: omp-binary-${{ matrix.target_id }}
+          path: ${{ matrix.binary_path }}
+
+  release:
+    name: Publish GitHub release
+    needs: build
+    # Run even if some build legs failed, so the platforms that succeeded still
+    # ship (fail-fast is off). Only a cancelled run skips publishing.
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - name: Download binaries
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: omp-binary-*
+          path: packages/coding-agent/binaries
+          merge-multiple: true
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
+        with:
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          files: |
+            packages/coding-agent/binaries/omp-*
+          generate_release_notes: true
+          fail_on_unmatched_files: false

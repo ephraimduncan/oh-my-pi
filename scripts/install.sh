@@ -2,7 +2,7 @@
 set -e
 
 # OMP Coding Agent Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/can1357/oh-my-pi/main/scripts/install.sh | sh
+# Usage: curl -fsSL https://raw.githubusercontent.com/ephraimduncan/oh-my-pi/main/scripts/install.sh | sh
 #
 # Options:
 #   --source       Install via bun (installs bun if needed)
@@ -10,7 +10,7 @@ set -e
 #   --ref <ref>    Install specific tag/commit/branch
 #   -r <ref>       Shorthand for --ref
 
-REPO="can1357/oh-my-pi"
+REPO="${OMP_REPO:-ephraimduncan/oh-my-pi}"
 PACKAGE="@oh-my-pi/pi-coding-agent"
 INSTALL_DIR="${PI_INSTALL_DIR:-$HOME/.local/bin}"
 MIN_BUN_VERSION="1.3.14"
@@ -142,6 +142,10 @@ has_git_lfs() {
 # Install via bun
 install_via_bun() {
     echo "Installing via bun..."
+    # This fork has no npm package (@oh-my-pi/* is upstream's), so a source
+    # install must come from the fork's git tree. Default to the main branch
+    # when no --ref is given rather than `bun install -g` from npm below.
+    [ -n "$REF" ] || REF="main"
     if [ -n "$REF" ]; then
         if ! has_git; then
             echo "git is required for --ref when installing from source"
@@ -253,12 +257,9 @@ case "$MODE" in
         install_binary
         ;;
     *)
-        # Default: use bun if available, otherwise binary
-        if has_bun; then
-            require_bun_version
-            install_via_bun
-        else
-            install_binary
-        fi
+        # Fork default: install the prebuilt GitHub Release binary. Upstream
+        # defaults to a bun/npm source install, but this fork ships release
+        # binaries and has no npm package; use --source to build from the fork.
+        install_binary
         ;;
 esac
