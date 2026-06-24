@@ -75,4 +75,43 @@ describe("Anthropic search request body", () => {
 		expect(userId.account_uuid).toBe(accountUuid);
 		expect(userId.device_id).toMatch(/^[0-9a-f]{64}$/);
 	});
+
+	it("uses the configured web_search model in place of the default", async () => {
+		using tempDir = TempDir.createSync("@pi-anthropic-search-model-");
+		const authStorage = await CodingAuthStorage.create(path.join(tempDir.path(), "auth.db"));
+		try {
+			authStorage.setRuntimeApiKey("anthropic", "test-key");
+			const cap = makeCaptureFetch();
+			await searchAnthropic({
+				query: "q",
+				systemPrompt: "Use web search.",
+				sessionId: "s",
+				authStorage,
+				model: "claude-sonnet-4-20250514",
+				fetch: cap.fetch,
+			});
+			expect(cap.body()?.model).toBe("claude-sonnet-4-20250514");
+		} finally {
+			authStorage.close();
+		}
+	});
+
+	it("falls back to the default search model when none is configured", async () => {
+		using tempDir = TempDir.createSync("@pi-anthropic-search-default-");
+		const authStorage = await CodingAuthStorage.create(path.join(tempDir.path(), "auth.db"));
+		try {
+			authStorage.setRuntimeApiKey("anthropic", "test-key");
+			const cap = makeCaptureFetch();
+			await searchAnthropic({
+				query: "q",
+				systemPrompt: "Use web search.",
+				sessionId: "s",
+				authStorage,
+				fetch: cap.fetch,
+			});
+			expect(cap.body()?.model).toBe("claude-sonnet-4-5");
+		} finally {
+			authStorage.close();
+		}
+	});
 });

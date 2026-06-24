@@ -6,8 +6,10 @@
  */
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { AuthStorage } from "@oh-my-pi/pi-ai";
-import { prompt } from "@oh-my-pi/pi-utils";
+import { logger, prompt } from "@oh-my-pi/pi-utils";
 import { type } from "arktype";
+import type { ModelRegistry } from "../../config/model-registry";
+import { getModelMatchPreferences, resolveModelRoleValue } from "../../config/model-resolver";
 import { settings } from "../../config/settings";
 import type { CustomTool, CustomToolContext, RenderResultOptions } from "../../extensibility/custom-tools/types";
 import type { Theme } from "../../modes/theme/theme";
@@ -129,6 +131,7 @@ interface ExecuteSearchOptions {
 	authStorage: AuthStorage;
 	sessionId?: string;
 	signal?: AbortSignal;
+	modelRegistry?: ModelRegistry;
 }
 
 /** Execute web search */
@@ -164,6 +167,33 @@ async function executeSearch(
 		antigravityEndpointMode = undefined;
 	}
 
+	// Resolve the configurable web-search model (modelRoles.web_search). Only
+	// the Anthropic provider consumes it, and only first-party Anthropic models
+	// are valid for that provider's native search endpoint — anything else is
+	// ignored so we never POST a foreign id to api.anthropic.com.
+	let webSearchModel: string | undefined;
+	if (options.modelRegistry) {
+		try {
+			const roleValue = settings.getModelRole("web_search");
+			if (roleValue) {
+				const resolved = resolveModelRoleValue(roleValue, options.modelRegistry.getAvailable(), {
+					settings,
+					matchPreferences: getModelMatchPreferences(settings),
+					modelRegistry: options.modelRegistry,
+				});
+				if (resolved.model?.provider === "anthropic") {
+					webSearchModel = resolved.model.id;
+				} else if (resolved.model) {
+					logger.warn("web_search model ignored: not a first-party Anthropic model", {
+						model: `${resolved.model.provider}/${resolved.model.id}`,
+					});
+				}
+			}
+		} catch {
+			webSearchModel = undefined;
+		}
+	}
+
 	const failures: Array<{ provider: SearchProvider; error: unknown }> = [];
 	let lastProvider = providers[0];
 	for (const provider of providers) {
@@ -181,6 +211,7 @@ async function executeSearch(
 				authStorage,
 				sessionId,
 				antigravityEndpointMode,
+				model: webSearchModel,
 			});
 
 			if (!hasRenderableSearchContent(response)) {
@@ -275,7 +306,12 @@ export class WebSearchTool implements AgentTool<typeof webSearchSchema, SearchRe
 	): Promise<AgentToolResult<SearchRenderDetails>> {
 		const authStorage = this.#session.authStorage ?? (await discoverAuthStorage());
 		const sessionId = this.#session.getSessionId?.() ?? undefined;
-		return executeSearch(_toolCallId, params, { authStorage, sessionId, signal });
+		return executeSearch(_toolCallId, params, {
+			authStorage,
+			sessionId,
+			signal,
+			modelRegistry: this.#session.modelRegistry,
+		});
 	}
 }
 
@@ -296,7 +332,7 @@ export const webSearchCustomTool: CustomTool<typeof webSearchSchema, SearchRende
 	) {
 		const authStorage = ctx.modelRegistry?.authStorage ?? (await discoverAuthStorage());
 		const sessionId = ctx.sessionManager.getSessionId();
-		return executeSearch(toolCallId, params, { authStorage, sessionId, signal });
+		return executeSearch(toolCallId, params, { authStorage, sessionId, signal, modelRegistry: ctx.modelRegistry });
 	},
 
 	renderCall(args: SearchToolParams, options: RenderResultOptions, theme: Theme) {
