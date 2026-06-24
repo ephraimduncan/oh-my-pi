@@ -10,7 +10,7 @@ import { logger, prompt } from "@oh-my-pi/pi-utils";
 import { type } from "arktype";
 import type { ModelRegistry } from "../../config/model-registry";
 import { getModelMatchPreferences, resolveModelRoleValue } from "../../config/model-resolver";
-import { settings } from "../../config/settings";
+import { type Settings, settings } from "../../config/settings";
 import type { CustomTool, CustomToolContext, RenderResultOptions } from "../../extensibility/custom-tools/types";
 import type { Theme } from "../../modes/theme/theme";
 import webSearchSystemPrompt from "../../prompts/system/web-search.md" with { type: "text" };
@@ -132,6 +132,7 @@ interface ExecuteSearchOptions {
 	sessionId?: string;
 	signal?: AbortSignal;
 	modelRegistry?: ModelRegistry;
+	settings?: Settings;
 }
 
 /** Execute web search */
@@ -172,14 +173,31 @@ async function executeSearch(
 	// are valid for that provider's native search endpoint — anything else is
 	// ignored so we never POST a foreign id to api.anthropic.com.
 	let webSearchModel: string | undefined;
-	if (options.modelRegistry) {
+	const modelRegistry = options.modelRegistry;
+	if (modelRegistry) {
+		// Prefer the session's Settings instance; the global singleton can be
+		// uninitialized on the SDK path (sessions built with an explicit
+		// Settings), where reading it throws and the role would be dropped.
+		const roleSettings = options.settings ?? settings;
 		try {
-			const roleValue = settings.getModelRole("web_search");
+			const roleValue = roleSettings.getModelRole("web_search");
 			if (roleValue) {
-				const resolved = resolveModelRoleValue(roleValue, options.modelRegistry.getAvailable(), {
-					settings,
-					matchPreferences: getModelMatchPreferences(settings),
-					modelRegistry: options.modelRegistry,
+				// ANTHROPIC_SEARCH_API_KEY authorizes the Anthropic search
+				// endpoint without normal Anthropic model auth, so getAvailable()
+				// may omit every Anthropic model. Add all known Anthropic models
+				// to the candidate pool so a configured role still resolves on a
+				// search-only credential.
+				const candidates = modelRegistry.getAvailable();
+				const seen = new Set(candidates.map(m => `${m.provider}/${m.id}`));
+				for (const model of modelRegistry.getAll()) {
+					if (model.provider === "anthropic" && !seen.has(`${model.provider}/${model.id}`)) {
+						candidates.push(model);
+					}
+				}
+				const resolved = resolveModelRoleValue(roleValue, candidates, {
+					settings: roleSettings,
+					matchPreferences: getModelMatchPreferences(roleSettings),
+					modelRegistry,
 				});
 				if (resolved.model?.provider === "anthropic") {
 					webSearchModel = resolved.model.id;
@@ -189,8 +207,11 @@ async function executeSearch(
 					});
 				}
 			}
-		} catch {
+		} catch (error) {
 			webSearchModel = undefined;
+			logger.debug("web_search model resolution failed; using provider default", {
+				error: error instanceof Error ? error.message : String(error),
+			});
 		}
 	}
 
@@ -311,6 +332,7 @@ export class WebSearchTool implements AgentTool<typeof webSearchSchema, SearchRe
 			sessionId,
 			signal,
 			modelRegistry: this.#session.modelRegistry,
+			settings: this.#session.settings,
 		});
 	}
 }
@@ -332,7 +354,13 @@ export const webSearchCustomTool: CustomTool<typeof webSearchSchema, SearchRende
 	) {
 		const authStorage = ctx.modelRegistry?.authStorage ?? (await discoverAuthStorage());
 		const sessionId = ctx.sessionManager.getSessionId();
-		return executeSearch(toolCallId, params, { authStorage, sessionId, signal, modelRegistry: ctx.modelRegistry });
+		return executeSearch(toolCallId, params, {
+			authStorage,
+			sessionId,
+			signal,
+			modelRegistry: ctx.modelRegistry,
+			settings: ctx.settings,
+		});
 	},
 
 	renderCall(args: SearchToolParams, options: RenderResultOptions, theme: Theme) {

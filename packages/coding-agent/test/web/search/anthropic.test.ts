@@ -99,6 +99,8 @@ describe("Anthropic search request body", () => {
 	it("falls back to the default search model when none is configured", async () => {
 		using tempDir = TempDir.createSync("@pi-anthropic-search-default-");
 		const authStorage = await CodingAuthStorage.create(path.join(tempDir.path(), "auth.db"));
+		const priorSearchModel = Bun.env.ANTHROPIC_SEARCH_MODEL;
+		delete Bun.env.ANTHROPIC_SEARCH_MODEL;
 		try {
 			authStorage.setRuntimeApiKey("anthropic", "test-key");
 			const cap = makeCaptureFetch();
@@ -111,6 +113,8 @@ describe("Anthropic search request body", () => {
 			});
 			expect(cap.body()?.model).toBe("claude-sonnet-4-5");
 		} finally {
+			if (priorSearchModel === undefined) delete Bun.env.ANTHROPIC_SEARCH_MODEL;
+			else Bun.env.ANTHROPIC_SEARCH_MODEL = priorSearchModel;
 			authStorage.close();
 		}
 	});
