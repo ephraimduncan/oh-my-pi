@@ -22,6 +22,24 @@ This repo contains multiple packages, but **`packages/coding-agent/`** is the pr
 
 **Catalog import convention**: code in this repo imports catalog *values* (bundled models, model-thinking helpers, identity, descriptors, model manager/cache) from `@oh-my-pi/pi-catalog/<module>` — never via `@oh-my-pi/pi-ai`. The pi-ai barrel re-exports only the model/effort *types* its own signatures use (`Model`, `Api`, `ThinkingConfig`, `Effort`, …); type-only imports of those from `@oh-my-pi/pi-ai` are fine.
 
+## Fork Maintenance
+
+This checkout is a personal fork of upstream Oh My Pi:
+
+- `origin` is the user's fork (`ephraimduncan/oh-my-pi`).
+- `upstream` is the canonical project (`can1357/oh-my-pi`).
+
+The goal is to keep the user's fixes/features while continuously importing upstream work.
+
+- Preserve local user commits as first-class changes. Never reset, overwrite, or force-push them away to match upstream unless the user explicitly asks.
+- Keep the `upstream` remote configured and merge `upstream/main` into this fork regularly. Prefer merge commits for shared branches so local history remains stable; do not rebase published user work unless asked.
+- Daily conflict-free upstream sync is automated by `.github/workflows/sync-upstream.yml`. If it opens a conflict issue, resolve the conflict by keeping the user's intended behavior and upstream's new fixes/features, then run the relevant checks before pushing.
+- All pushes, branches, and pull requests from this checkout target `origin` (`ephraimduncan/oh-my-pi`) only. Never push to `upstream`, never open PRs against `can1357/oh-my-pi`, and never use public branch names/descriptions that imply this fork's changes are upstream contributions.
+- Treat `upstream` as fetch-only. Its local push URL should remain disabled; if it is missing or points at `can1357/oh-my-pi`, run `git remote set-url --push upstream DISABLED` before doing GitHub work.
+- Because upstream is merged regularly, design local changes to minimize future merge conflicts: keep diffs narrow, avoid unrelated formatting/reordering, prefer extension points over editing upstream-heavy core paths, and preserve upstream file structure when possible.
+- Treat conflict risk as part of implementation review. Before changing files that upstream edits often, check the nearby upstream pattern, keep the patch isolated, and note any conflict-prone local behavior in the final handoff so it can be watched during future syncs.
+- When adding user-specific features, keep patches small, tested, and easy to reapply during future upstream merges.
+
 ## Code Quality
 
 - No `any` unless absolutely necessary.

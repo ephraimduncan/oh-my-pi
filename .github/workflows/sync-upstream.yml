@@ -1,0 +1,127 @@
+name: Sync upstream
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+# Keep the personal fork moving with can1357/oh-my-pi without clobbering local work.
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout fork main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Merge upstream main
+        id: merge
+        shell: bash
+        run: |
+          set -u
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git remote add upstream https://github.com/can1357/oh-my-pi.git
+          git remote set-url --push upstream DISABLED
+          git fetch --tags upstream main:refs/remotes/upstream/main
+
+          if git merge-base --is-ancestor upstream/main HEAD; then
+            echo "Fork already contains upstream/main."
+            echo "status=up-to-date" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if ! git merge --no-edit upstream/main; then
+            {
+              echo "status=conflict"
+              echo "conflicts<<EOF"
+              git diff --name-only --diff-filter=U
+              echo "EOF"
+            } >> "$GITHUB_OUTPUT"
+            git merge --abort || true
+            exit 0
+          fi
+
+          echo "status=merged" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Push synced main
+        if: steps.merge.outputs.status == 'merged'
+        run: git push origin HEAD:main
+
+      - name: Close resolved conflict issue
+        if: steps.merge.outputs.status == 'merged' || steps.merge.outputs.status == 'up-to-date'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -u
+
+          existing_issue=$(gh issue list \
+            --state open \
+            --search "Resolve upstream sync conflict in:title" \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -n "$existing_issue" ]; then
+            gh issue close "$existing_issue" \
+              --comment "The latest upstream sync completed successfully. Closing this conflict tracker."
+          fi
+
+      - name: Report merge conflict
+        if: steps.merge.outputs.status == 'conflict'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          CONFLICTS: ${{ steps.merge.outputs.conflicts }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -u
+
+          title="Resolve upstream sync conflict"
+          body_file=$(mktemp)
+          cat > "$body_file" <<EOF
+          The scheduled upstream sync could not merge \`can1357/oh-my-pi:main\` into this fork's \`main\`.
+
+          Conflicting files:
+          \`\`\`
+          ${CONFLICTS:-unknown}
+          \`\`\`
+
+          Run: $RUN_URL
+
+          Resolve locally:
+          1. \`git fetch upstream main\`
+          2. \`git checkout main\`
+          3. \`git merge upstream/main\`
+          4. Resolve conflicts by preserving local user features and upstream fixes.
+          5. Run the relevant checks.
+          6. Push \`main\`.
+          EOF
+
+          existing_issue=$(gh issue list \
+            --state open \
+            --search "$title in:title" \
+            --json number \
+            --jq '.[0].number // empty')
+
+          if [ -n "$existing_issue" ]; then
+            gh issue comment "$existing_issue" --body-file "$body_file"
+          else
+            gh issue create --title "$title" --body-file "$body_file"
+          fi
+
+          exit 1
