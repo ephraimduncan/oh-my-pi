@@ -32,7 +32,7 @@ import type { SearchParams } from "./base";
 import { SearchProvider } from "./base";
 import { classifyProviderHttpError, withHardTimeout } from "./utils";
 
-const DEFAULT_MODEL = "claude-haiku-4-5";
+const DEFAULT_MODEL = "claude-sonnet-4-5";
 const DEFAULT_MAX_TOKENS = 4096;
 const WEB_SEARCH_TOOL_NAME = "web_search";
 const WEB_SEARCH_TOOL_TYPE = "web_search_20250305";
@@ -50,8 +50,8 @@ export interface AnthropicSearchParams {
  * Gets the model to use for web search from environment or default.
  * @returns Model identifier string
  */
-function getModel(): string {
-	return $env.ANTHROPIC_SEARCH_MODEL ?? DEFAULT_MODEL;
+function getModel(override?: string): string {
+	return override ?? $env.ANTHROPIC_SEARCH_MODEL ?? DEFAULT_MODEL;
 }
 
 /**
@@ -277,7 +277,7 @@ export async function searchAnthropic(
 		);
 	}
 
-	const model = getModel();
+	const model = getModel("authStorage" in params ? params.model : undefined);
 	const systemPrompt = "authStorage" in params ? params.systemPrompt : params.system_prompt;
 	const maxTokens = "authStorage" in params ? params.maxOutputTokens : params.max_tokens;
 	const callerSessionId = "authStorage" in params ? params.sessionId : undefined;

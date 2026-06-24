@@ -6,9 +6,11 @@
  */
 import type { AgentTool, AgentToolContext, AgentToolResult, AgentToolUpdateCallback } from "@oh-my-pi/pi-agent-core";
 import type { AuthStorage } from "@oh-my-pi/pi-ai";
-import { prompt } from "@oh-my-pi/pi-utils";
+import { logger, prompt } from "@oh-my-pi/pi-utils";
 import { type } from "arktype";
-import { settings } from "../../config/settings";
+import type { ModelRegistry } from "../../config/model-registry";
+import { getModelMatchPreferences, resolveModelRoleValue } from "../../config/model-resolver";
+import { type Settings, settings } from "../../config/settings";
 import type { CustomTool, CustomToolContext, RenderResultOptions } from "../../extensibility/custom-tools/types";
 import type { Theme } from "../../modes/theme/theme";
 import webSearchSystemPrompt from "../../prompts/system/web-search.md" with { type: "text" };
@@ -129,6 +131,8 @@ interface ExecuteSearchOptions {
 	authStorage: AuthStorage;
 	sessionId?: string;
 	signal?: AbortSignal;
+	modelRegistry?: ModelRegistry;
+	settings?: Settings;
 }
 
 /** Execute web search */
@@ -164,6 +168,53 @@ async function executeSearch(
 		antigravityEndpointMode = undefined;
 	}
 
+	// Resolve the configurable web-search model (modelRoles.web_search). Only
+	// the Anthropic provider consumes it, and only first-party Anthropic models
+	// are valid for that provider's native search endpoint — anything else is
+	// ignored so we never POST a foreign id to api.anthropic.com.
+	let webSearchModel: string | undefined;
+	const modelRegistry = options.modelRegistry;
+	if (modelRegistry) {
+		// Prefer the session's Settings instance; the global singleton can be
+		// uninitialized on the SDK path (sessions built with an explicit
+		// Settings), where reading it throws and the role would be dropped.
+		const roleSettings = options.settings ?? settings;
+		try {
+			const roleValue = roleSettings.getModelRole("web_search");
+			if (roleValue) {
+				// ANTHROPIC_SEARCH_API_KEY authorizes the Anthropic search
+				// endpoint without normal Anthropic model auth, so getAvailable()
+				// may omit every Anthropic model. Add all known Anthropic models
+				// to the candidate pool so a configured role still resolves on a
+				// search-only credential.
+				const candidates = modelRegistry.getAvailable();
+				const seen = new Set(candidates.map(m => `${m.provider}/${m.id}`));
+				for (const model of modelRegistry.getAll()) {
+					if (model.provider === "anthropic" && !seen.has(`${model.provider}/${model.id}`)) {
+						candidates.push(model);
+					}
+				}
+				const resolved = resolveModelRoleValue(roleValue, candidates, {
+					settings: roleSettings,
+					matchPreferences: getModelMatchPreferences(roleSettings),
+					modelRegistry,
+				});
+				if (resolved.model?.provider === "anthropic") {
+					webSearchModel = resolved.model.id;
+				} else if (resolved.model) {
+					logger.warn("web_search model ignored: not a first-party Anthropic model", {
+						model: `${resolved.model.provider}/${resolved.model.id}`,
+					});
+				}
+			}
+		} catch (error) {
+			webSearchModel = undefined;
+			logger.debug("web_search model resolution failed; using provider default", {
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+	}
+
 	const failures: Array<{ provider: SearchProvider; error: unknown }> = [];
 	let lastProvider = providers[0];
 	for (const provider of providers) {
@@ -181,6 +232,7 @@ async function executeSearch(
 				authStorage,
 				sessionId,
 				antigravityEndpointMode,
+				model: webSearchModel,
 			});
 
 			if (!hasRenderableSearchContent(response)) {
@@ -275,7 +327,13 @@ export class WebSearchTool implements AgentTool<typeof webSearchSchema, SearchRe
 	): Promise<AgentToolResult<SearchRenderDetails>> {
 		const authStorage = this.#session.authStorage ?? (await discoverAuthStorage());
 		const sessionId = this.#session.getSessionId?.() ?? undefined;
-		return executeSearch(_toolCallId, params, { authStorage, sessionId, signal });
+		return executeSearch(_toolCallId, params, {
+			authStorage,
+			sessionId,
+			signal,
+			modelRegistry: this.#session.modelRegistry,
+			settings: this.#session.settings,
+		});
 	}
 }
 
@@ -296,7 +354,13 @@ export const webSearchCustomTool: CustomTool<typeof webSearchSchema, SearchRende
 	) {
 		const authStorage = ctx.modelRegistry?.authStorage ?? (await discoverAuthStorage());
 		const sessionId = ctx.sessionManager.getSessionId();
-		return executeSearch(toolCallId, params, { authStorage, sessionId, signal });
+		return executeSearch(toolCallId, params, {
+			authStorage,
+			sessionId,
+			signal,
+			modelRegistry: ctx.modelRegistry,
+			settings: ctx.settings,
+		});
 	},
 
 	renderCall(args: SearchToolParams, options: RenderResultOptions, theme: Theme) {

@@ -52,6 +52,14 @@ export interface SearchParams {
 	 */
 	sessionId?: string;
 	antigravityEndpointMode?: "auto" | "production" | "sandbox";
+	/**
+	 * Optional model-id override for LLM-backed providers that synthesize an
+	 * answer. Currently honored only by the Anthropic provider, which uses it
+	 * in place of its default search model. Resolved from the `web_search`
+	 * model role and pre-validated to a first-party Anthropic model upstream
+	 * (see executeSearch in ../index.ts).
+	 */
+	model?: string;
 }
 
 /** Base class for web search providers. */
