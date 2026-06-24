@@ -9,9 +9,15 @@ set -e
 #   --binary       Always install prebuilt binary
 #   --ref <ref>    Install specific tag/commit/branch
 #   -r <ref>       Shorthand for --ref
+#
+# Env:
+#   OMP_BIN_NAME   Installed command name (default: ompd, so the fork coexists with upstream omp)
 
 REPO="${OMP_REPO:-ephraimduncan/oh-my-pi}"
 PACKAGE="@oh-my-pi/pi-coding-agent"
+# Command name to install as. Defaults to `ompd` so this fork lives beside an
+# upstream `omp`; set OMP_BIN_NAME=omp to replace omp instead.
+BIN="${OMP_BIN_NAME:-ompd}"
 INSTALL_DIR="${PI_INSTALL_DIR:-$HOME/.local/bin}"
 MIN_BUN_VERSION="1.3.14"
 
@@ -182,9 +188,15 @@ install_via_bun() {
             exit 1
         }
     fi
+    # bun links the package's `omp` bin; rename it to the fork's command name so
+    # it can coexist with an upstream omp.
+    if [ "$BIN" != "omp" ]; then
+        bun_bin="$(bun pm -g bin 2>/dev/null || true)"
+        [ -n "$bun_bin" ] && [ -e "$bun_bin/omp" ] && mv -f "$bun_bin/omp" "$bun_bin/$BIN"
+    fi
     echo ""
-    echo "✓ Installed omp via bun"
-    echo "Run 'omp' to get started!"
+    echo "✓ Installed $BIN via bun"
+    echo "Run '$BIN' to get started!"
 }
 
 # Install binary from GitHub releases
@@ -232,15 +244,15 @@ install_binary() {
     # Download binary
     BINARY_URL="https://github.com/${REPO}/releases/download/${LATEST}/${BINARY}"
     echo "Downloading ${BINARY}..."
-    curl -fsSL "$BINARY_URL" -o "${INSTALL_DIR}/omp"
-    chmod +x "${INSTALL_DIR}/omp"
+    curl -fsSL "$BINARY_URL" -o "${INSTALL_DIR}/${BIN}"
+    chmod +x "${INSTALL_DIR}/${BIN}"
     echo ""
-    echo "✓ Installed omp to ${INSTALL_DIR}/omp"
+    echo "✓ Installed $BIN to ${INSTALL_DIR}/${BIN}"
 
     # Check if in PATH
     case ":$PATH:" in
-        *":$INSTALL_DIR:"*) echo "Run 'omp' to get started!" ;;
-        *) echo "Add ${INSTALL_DIR} to your PATH, then run 'omp'" ;;
+        *":$INSTALL_DIR:"*) echo "Run '$BIN' to get started!" ;;
+        *) echo "Add ${INSTALL_DIR} to your PATH, then run '$BIN'" ;;
     esac
 }
 
