@@ -28,6 +28,14 @@ The most capable agent surface that ships. Continuously tuned by real-world use 
 
 ## Install
 
+**This fork** — installs as `ompd`, so it runs alongside an upstream `omp`:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/ephraimduncan/oh-my-pi/main/scripts/install.sh | sh
+```
+
+Re-run that command any time to update to the latest [fork release](https://github.com/ephraimduncan/oh-my-pi/releases). The methods below install the upstream build as `omp`.
+
 **macOS · Linux**
 
 ```sh
