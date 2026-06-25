@@ -1,0 +1,62 @@
+# Fork-only CI (ephraimduncan/oh-my-pi).
+#
+# Upstream's ci.yml is an ~14-job pipeline that, on this fork, is mostly dead:
+#   - every push-to-main job targets the `omp-kata` self-hosted runner this fork
+#     does not have, so they queue forever then get cancelled; and
+#   - its release jobs (npm / Homebrew / Apple signing) need upstream secrets.
+# So upstream's "CI" and the two "Vouch" workflows are DISABLED on this fork via
+# the Actions settings (`gh workflow disable`) — their files are left untouched
+# so daily `upstream/main` syncs never conflict. This fork-owned workflow is the
+# lean replacement: lint + type check + collab-web build, plus the full TS test
+# suite against a locally-built native addon, all on GitHub-hosted runners.
+#
+# Kept as a separate file (never edits to ci.yml) so upstream merges never
+# conflict here.
+name: Fork CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: fork-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Lint, type check & web build
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/bun-install
+      - name: Type check workspace
+        run: bun run ci:check:full
+      - name: Build collab web
+        run: bun run collab:web:build
+
+  test:
+    name: Test TS workspace
+    runs-on: ubuntu-22.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/ensure-rust-toolchain
+        with:
+          toolchain: nightly-2026-04-29
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: fork-ci-native-linux-x64
+      - uses: ./.github/actions/setup-system-deps
+      - uses: ./.github/actions/bun-install
+      - name: Build native addon
+        run: bun run build:native
+      - name: Test TS suite
+        run: bun run ci:test:ts
+      - name: CLI smoke test
+        run: bun run ci:test:smoke
