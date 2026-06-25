@@ -1,5 +1,6 @@
 import { buildModel } from "@oh-my-pi/pi-catalog/build";
 import { Effort } from "@oh-my-pi/pi-catalog/effort";
+import { clampThinkingLevelForModel } from "@oh-my-pi/pi-catalog/model-thinking";
 import { ANTHROPIC_THINKING, mapAnthropicToolChoice } from "../stream";
 import type { Api, Context, FetchImpl, Model, ModelSpec, SimpleStreamOptions } from "../types";
 import { AssistantMessageEventStream } from "../utils/event-stream";
@@ -255,8 +256,11 @@ export function streamGitLabDuo(
 			};
 
 			const reasoningEffort = options.reasoning;
-			// OpenAI proxy branches expose no "max" tier (Anthropic-only); fold it into "xhigh".
-			const openaiReasoning = reasoningEffort === Effort.Max ? Effort.XHigh : reasoningEffort;
+			// OpenAI proxy branches expose no "max" tier (Anthropic-only). Clamp to
+			// the routed model's top supported effort rather than folding "max" to
+			// "xhigh", which would exceed models that stop at "high".
+			const clampedOpenai = clampThinkingLevelForModel(model, reasoningEffort);
+			const openaiReasoning = clampedOpenai === Effort.Max ? Effort.XHigh : clampedOpenai;
 
 			const inner =
 				mapping.provider === "anthropic"

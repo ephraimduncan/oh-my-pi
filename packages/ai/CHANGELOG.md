@@ -4,7 +4,7 @@
 
 ### Added
 
-- Added the `max` reasoning effort to the per-provider thinking-budget tables (Anthropic/Google/Bedrock) for type-completeness; adaptive Claude ignore these budgets. OpenAI-family endpoints expose no `max` tier and fold a `max` request down to their top `xhigh` tier.
+- Added `max` reasoning-effort support across providers. The per-provider thinking-budget tables (Anthropic/Google/Bedrock) gain a `max` entry for type-completeness (adaptive Claude ignore these budgets), and the request dispatch (`mapOptionsForApi`, plus the OpenAI-shim and GitLab Duo bypass paths) clamps a `max` request down to the target model's top supported effort. Models without a `max` tier (including OpenAI-family endpoints that top out at `high`/`xhigh`) degrade gracefully instead of forwarding an unsupported `max`/`xhigh` to the provider.
 
 ## [16.1.16] - 2026-06-23
 

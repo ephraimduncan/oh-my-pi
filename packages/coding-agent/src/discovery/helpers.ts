@@ -17,7 +17,7 @@ import { invalidate as invalidateFsCache, readDirEntries, readFile } from "../ca
 import { parseRuleConditionAndScope, type Rule, type RuleFrontmatter } from "../capability/rule";
 import type { Skill, SkillFrontmatter } from "../capability/skill";
 import type { LoadContext, LoadResult, SourceMeta } from "../capability/types";
-import { parseThinkingLevel } from "../thinking";
+import { AUTO_THINKING, parseConfiguredThinkingLevel } from "../thinking";
 
 import { buildPluginDirRoot } from "./plugin-dir-roots";
 
@@ -281,7 +281,11 @@ export function parseAgentFields(frontmatter: Record<string, unknown>): ParsedAg
 				? frontmatter.thinking
 				: undefined;
 
-	const thinkingLevel = parseThinkingLevel(rawThinkingLevel);
+	// Capability frontmatter accepts concrete levels plus `max`; `auto` is not a
+	// valid frontmatter selector, so collapse it to undefined. (The strict
+	// `parseThinkingLevel` rejects `max` to preserve model-suffix gating.)
+	const configuredThinkingLevel = parseConfiguredThinkingLevel(rawThinkingLevel);
+	const thinkingLevel = configuredThinkingLevel === AUTO_THINKING ? undefined : configuredThinkingLevel;
 	const model = parseModelList(frontmatter.model);
 	const blocking = parseBoolean(frontmatter.blocking);
 	const readSummarize = parseBoolean(frontmatter.readSummarize);

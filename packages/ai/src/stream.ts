@@ -1,6 +1,7 @@
 import { Effort } from "@oh-my-pi/pi-catalog/effort";
 import { isVertexExpressOpenAIUrl, isVertexRawPredictUrl } from "@oh-my-pi/pi-catalog/hosts";
 import {
+	clampThinkingLevelForModel,
 	mapEffortToAnthropicAdaptiveEffort,
 	mapEffortToGoogleThinkingLevel,
 	minimumSupportedEffort,
@@ -797,7 +798,17 @@ function mapOptionsForApi<TApi extends Api>(
 	rawOptions?: SimpleStreamOptions,
 	apiKey?: string,
 ): OptionsForApi<TApi> {
-	const options = normalizeMandatoryReasoningOptions(model, rawOptions);
+	const normalized = normalizeMandatoryReasoningOptions(model, rawOptions);
+	// `max` is Anthropic's top tier and unsupported by most models. Clamp it to
+	// the model's highest supported effort here — the single dispatch chokepoint —
+	// so adaptive/budget/effort lookups below never feed an unsupported `max`
+	// into `requireSupportedEffort` (which throws). Callers that already clamp
+	// (coding-agent session resolution) are unaffected; SDK callers and the
+	// deferred model-pattern path are covered.
+	const options =
+		normalized?.reasoning === Effort.Max
+			? { ...normalized, reasoning: clampThinkingLevelForModel(model, normalized.reasoning) }
+			: normalized;
 	const base = {
 		temperature: options?.temperature,
 		topP: options?.topP,
