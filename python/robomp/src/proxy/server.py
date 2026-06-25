@@ -108,6 +108,36 @@ def _require_int(value: Any, field: str) -> int:
     return value
 
 
+_SAFE_REF_BODY_RE = re.compile(r"[A-Za-z0-9._/-]+")
+
+
+def _require_fetch_ref(value: Any) -> str:
+    """Validate the base-branch ref for `/gh/v1/git/fetch_ref`.
+
+    The orchestrator only ever fetches a branch — a bare name (`main`,
+    `farm/x/y`, `alice/fix-parser`) or `refs/heads/<name>`. Reject anything
+    `git_ops._branch_refspec` would otherwise pass verbatim into the fetch
+    refspec: `:` (refspec injection — write arbitrary refs in the shared
+    pool), a leading `-` (argv option injection), and (via the charset) `*`
+    `+` `~` `^` `@` `?` `[` `\\`, whitespace, and control bytes; plus the
+    git-invalid `..` / `//` / leading-or-trailing `/` / trailing `.`|`.lock`
+    forms. Normal slashy branch names still pass.
+    """
+    ref = _require_str(value, "ref")
+    body = ref.removeprefix("refs/heads/")
+    if (
+        not body
+        or ref.startswith("-")
+        or body.startswith("/")
+        or body.endswith(("/", ".", ".lock"))
+        or "//" in body
+        or ".." in body
+        or not _SAFE_REF_BODY_RE.fullmatch(body)
+    ):
+        raise HTTPException(400, "invalid ref")
+    return ref
+
+
 def _optional_slot_uid(value: Any) -> int | None:
     if value is None:
         return None
@@ -288,6 +318,8 @@ def _remote_auth_for_url(url: str, expected_repo: str, token: str) -> _RemoteAut
         raise HTTPException(400, "remote url must not be empty or padded")
     if _FORBIDDEN_URL_BYTES_RE.search(raw):
         raise HTTPException(400, "remote url contains forbidden control bytes")
+    if raw.startswith("-"):
+        raise HTTPException(400, "remote url must not start with '-'")
     if _REMOTE_HELPER_RE.match(raw):
         raise HTTPException(400, "git remote helper transports are disabled")
     scheme = (urlparse(raw).scheme or "").lower()
@@ -729,7 +761,7 @@ def create_proxy_app(settings: Settings) -> FastAPI:
     async def git_fetch_ref_endpoint(request: Request) -> JSONResponse:
         data = await _json_body(request)
         repo = _require_str(data.get("repo"), "repo")
-        ref = _require_str(data.get("ref"), "ref")
+        ref = _require_fetch_ref(data.get("ref"))
         target = _pool_dir(settings, repo)
         remote = await asyncio.to_thread(_origin_remote_auth, target, repo, _resolve_token(settings))
         # fetch_ref is intentionally best-effort; never surfaces a 5xx.
