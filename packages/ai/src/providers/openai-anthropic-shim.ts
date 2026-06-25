@@ -9,6 +9,7 @@
  */
 
 import { buildModel } from "@oh-my-pi/pi-catalog/build";
+import { Effort } from "@oh-my-pi/pi-catalog/effort";
 import { ANTHROPIC_THINKING, mapAnthropicToolChoice } from "../stream";
 import type { Context, Model, ModelSpec, SimpleStreamOptions } from "../types";
 import { AssistantMessageEventStream } from "../utils/event-stream";
@@ -112,7 +113,8 @@ export function streamOpenAIAnthropicShim(
 						} as ModelSpec<"openai-completions">)
 					: model;
 
-				const reasoningEffort = options?.reasoning;
+				// The OpenAI-format branch has no "max" tier (Anthropic-only); fold it into "xhigh".
+				const reasoningEffort = options?.reasoning === Effort.Max ? Effort.XHigh : options?.reasoning;
 				const innerStream = streamOpenAICompletions(openaiModel, context, {
 					apiKey,
 					temperature: options?.temperature,

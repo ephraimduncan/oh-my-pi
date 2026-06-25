@@ -61,6 +61,15 @@ const GPT_5_2_PLUS_EFFORTS: readonly Effort[] = [Effort.Low, Effort.Medium, Effo
 const GPT_5_1_CODEX_MINI_EFFORTS: readonly Effort[] = [Effort.Medium, Effort.High];
 const LOW_MEDIUM_HIGH_REASONING_EFFORTS: readonly Effort[] = [Effort.Low, Effort.Medium, Effort.High];
 const GLM_52_HIGH_MAX_REASONING_EFFORTS: readonly Effort[] = [Effort.High, Effort.XHigh];
+const ANTHROPIC_MSG_EFFORTS_BASE: readonly Effort[] = [Effort.Low, Effort.Medium, Effort.High];
+const ANTHROPIC_MSG_EFFORTS_OPUS46: readonly Effort[] = [Effort.Low, Effort.Medium, Effort.High, Effort.Max];
+const ANTHROPIC_MSG_EFFORTS_5TIER: readonly Effort[] = [
+	Effort.Low,
+	Effort.Medium,
+	Effort.High,
+	Effort.XHigh,
+	Effort.Max,
+];
 
 const FUGU_REASONING_EFFORTS: readonly Effort[] = [Effort.High, Effort.XHigh];
 const FUGU_REASONING_EFFORT_MAP: Readonly<EffortMap> = {
@@ -368,9 +377,16 @@ function inferDetectedEffortMap<TApi extends Api>(
 		if (isMinimaxReasoningModelOnAnthropicEndpoint(spec)) {
 			return MINIMAX_ANTHROPIC_ADAPTIVE_EFFORT_MAP;
 		}
+		if (
+			spec.api === "anthropic-messages" &&
+			parsedModel.family === "anthropic" &&
+			semverGte(parsedModel.version, "4.6")
+		) {
+			return undefined; // first-party Claude: 1:1 identity, efforts define the wire vocabulary
+		}
 		return anthropicModelHasRealXHighEffort(spec, parsedModel)
 			? ANTHROPIC_ADAPTIVE_EFFORT_MAP_5_TIER
-			: ANTHROPIC_ADAPTIVE_EFFORT_MAP_4_TIER;
+			: ANTHROPIC_ADAPTIVE_EFFORT_MAP_4_TIER; // bedrock keeps 4-tier
 	}
 	// GLM-5.2 coding SKUs accept `reasoning_effort`, but the effort dialect is
 	// host-specific (verified against live endpoints):
@@ -512,10 +528,12 @@ function inferAnthropicSupportedEfforts<TApi extends Api>(
 	spec: ModelSpec<TApi>,
 	compat: CompatOf<TApi>,
 ): readonly Effort[] {
-	if (
-		(spec.api === "anthropic-messages" || spec.api === "bedrock-converse-stream") &&
-		semverGte(parsedModel.version, "4.6")
-	) {
+	if (spec.api === "anthropic-messages" && semverGte(parsedModel.version, "4.6")) {
+		if (anthropicModelHasRealXHighEffort(spec, parsedModel)) return ANTHROPIC_MSG_EFFORTS_5TIER;
+		if (anthropicMessagesHasMaxEffort(parsedModel)) return ANTHROPIC_MSG_EFFORTS_OPUS46; // Opus 4.6
+		return ANTHROPIC_MSG_EFFORTS_BASE; // Sonnet/Haiku 4.6
+	}
+	if (spec.api === "bedrock-converse-stream" && semverGte(parsedModel.version, "4.6")) {
 		return parsedModel.kind === "opus" || isFableOrMythos(parsedModel.kind)
 			? DEFAULT_REASONING_EFFORTS_WITH_XHIGH
 			: DEFAULT_REASONING_EFFORTS;
@@ -627,6 +645,14 @@ function anthropicModelHasRealXHighEffort<TApi extends Api>(spec: ModelSpec<TApi
 	return parsedModel.kind === "opus" && semverGte(parsedModel.version, "4.7");
 }
 
+// First-party Anthropic Messages adaptive Claude that accept output_config.effort:"max".
+// Opus 4.6+ and Fable/Mythos; Sonnet/Haiku excluded (no max tier).
+function anthropicMessagesHasMaxEffort(parsedModel: ParsedModel): boolean {
+	if (parsedModel.family !== "anthropic") return false;
+	if (isFableOrMythos(parsedModel.kind)) return true;
+	return parsedModel.kind === "opus" && semverGte(parsedModel.version, "4.6");
+}
+
 // ---------------------------------------------------------------------------
 // Runtime helpers (field reads only — safe per request)
 // ---------------------------------------------------------------------------
@@ -704,6 +730,7 @@ export function mapEffortToGoogleThinkingLevel(effort: Effort): "MINIMAL" | "LOW
 			return "MEDIUM";
 		case Effort.High:
 		case Effort.XHigh:
+		case Effort.Max:
 			return "HIGH";
 	}
 }

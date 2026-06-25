@@ -40,7 +40,10 @@ function responsesSse(): Response {
 	);
 }
 
-async function captureChatEffort(model: Model<"openai-completions">, reasoning: Effort): Promise<unknown> {
+async function captureChatEffort(
+	model: Model<"openai-completions">,
+	reasoning: Exclude<Effort, Effort.Max>,
+): Promise<unknown> {
 	let body: Record<string, unknown> | undefined;
 	const fetchMock: FetchImpl = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
 		body = JSON.parse(typeof init?.body === "string" ? init.body : "{}") as Record<string, unknown>;
@@ -53,7 +56,10 @@ async function captureChatEffort(model: Model<"openai-completions">, reasoning: 
 	return body.reasoning_effort;
 }
 
-async function captureResponsesEffort(model: Model<"openrouter">, reasoning: Effort): Promise<unknown> {
+async function captureResponsesEffort(
+	model: Model<"openrouter">,
+	reasoning: Exclude<Effort, Effort.Max>,
+): Promise<unknown> {
 	let body: Record<string, unknown> | undefined;
 	const fetchMock: FetchImpl = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
 		body = JSON.parse(typeof init?.body === "string" ? init.body : "{}") as Record<string, unknown>;

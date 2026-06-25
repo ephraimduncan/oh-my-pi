@@ -1,4 +1,4 @@
-import type { Effort } from "@oh-my-pi/pi-catalog/effort";
+import { Effort } from "@oh-my-pi/pi-catalog/effort";
 import { isVertexExpressOpenAIUrl, isVertexRawPredictUrl } from "@oh-my-pi/pi-catalog/hosts";
 import {
 	mapEffortToAnthropicAdaptiveEffort,
@@ -628,6 +628,7 @@ export const ANTHROPIC_THINKING: Record<Effort, number> = {
 	medium: 8192,
 	high: 16384,
 	xhigh: 32768,
+	max: 32768,
 };
 
 const GOOGLE_THINKING: Record<Effort, number> = {
@@ -636,6 +637,7 @@ const GOOGLE_THINKING: Record<Effort, number> = {
 	medium: 8192,
 	high: 16384,
 	xhigh: 24575,
+	max: 24575,
 };
 
 const BEDROCK_CLAUDE_THINKING: Record<Effort, number> = {
@@ -644,6 +646,7 @@ const BEDROCK_CLAUDE_THINKING: Record<Effort, number> = {
 	medium: 8192,
 	high: 16384,
 	xhigh: 16384,
+	max: 16384,
 };
 
 function resolveBedrockThinkingBudget(
@@ -738,9 +741,9 @@ function resolveSupportedMappedReasoningEffort<TApi extends Api>(
 function resolveOpenAiReasoningEffort<TApi extends Api>(
 	model: Model<TApi>,
 	options?: SimpleStreamOptions,
-): Effort | undefined {
-	const reasoning = options?.reasoning;
-	if (!reasoning || !model.reasoning) return undefined;
+): Exclude<Effort, Effort.Max> | undefined {
+	const requested = options?.reasoning;
+	if (!requested || !model.reasoning) return undefined;
 	// Models that reason natively but expose no effort dial carry
 	// `thinking: undefined` (baked at build time from
 	// `compat.supportsReasoningEffort: false` on openai-responses*). The
@@ -749,12 +752,15 @@ function resolveOpenAiReasoningEffort<TApi extends Api>(
 	// defeat the gate and surface a confusing "Compaction failed: Thinking effort
 	// high is not supported by..." to the user.
 	if (!model.thinking) return undefined;
+	// OpenAI-family endpoints expose no "max" tier (Anthropic-only); fold it into the top "xhigh".
+	const reasoning = requested === Effort.Max ? Effort.XHigh : requested;
 	if (model.thinking.efforts.includes(reasoning)) return reasoning;
 	const mappedReasoning = resolveSupportedMappedReasoningEffort(model, reasoning);
-	if (mappedReasoning) return mappedReasoning;
+	if (mappedReasoning !== undefined && mappedReasoning !== Effort.Max) return mappedReasoning;
 	if (getCompatReasoningEffortMap(model)?.[reasoning] !== undefined) return reasoning;
 	if (model.thinking.effortMap?.[reasoning] !== undefined) return reasoning;
-	return requireSupportedEffort(model, reasoning);
+	const supported = requireSupportedEffort(model, reasoning);
+	return supported === Effort.Max ? Effort.XHigh : supported;
 }
 
 const castApi = <TApi extends Api>(api: OptionsForApi<TApi>): OptionsForApi<Api> => api as OptionsForApi<Api>;

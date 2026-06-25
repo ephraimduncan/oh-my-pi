@@ -5,6 +5,7 @@
 ### Added
 
 - Added a switchable `web_search` model role to override the web-search model: choose it from the model selector (`/model` or Alt+M → Set as Web Search) or via `modelRoles.web_search` in settings. Honored by the Anthropic provider; non-Anthropic selections are ignored.
+- Added a selectable `max` thinking level (Anthropic's deepest reasoning tier) for first-party Claude models on the Messages API (Opus 4.6+). Selectable via `--thinking max`, `defaultThinkingLevel: max`, the `provider/id:max` suffix, and the TUI thinking picker/cycle; it clamps down to a model's top tier on models without a `max` tier.
 
 ### Changed
 

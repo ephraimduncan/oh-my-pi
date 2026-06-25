@@ -10788,19 +10788,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -10886,19 +10879,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -11104,16 +11090,11 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
-				],
-				"effortMap": {
-					"minimal": "low",
-					"xhigh": "max"
-				}
+					"max"
+				]
 			}
 		},
 		"claude-opus-4-7": {
@@ -11138,19 +11119,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -11176,19 +11150,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -11334,14 +11301,10 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high"
-				],
-				"effortMap": {
-					"minimal": "low"
-				}
+				]
 			}
 		}
 	},
@@ -12563,19 +12526,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -12721,16 +12677,11 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
-				],
-				"effortMap": {
-					"minimal": "low",
-					"xhigh": "max"
-				}
+					"max"
+				]
 			}
 		},
 		"anthropic/claude-opus-4-7": {
@@ -12755,19 +12706,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -12793,19 +12737,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -12891,14 +12828,10 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high"
-				],
-				"effortMap": {
-					"minimal": "low"
-				}
+				]
 			}
 		},
 		"claude-sonnet-4-5": {
@@ -14716,19 +14649,19 @@
 			"thinking": {
 				"mode": "effort",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
 				"requiresEffort": true,
 				"effortRouting": {
-					"minimal": "claude-opus-4-7-low",
-					"low": "claude-opus-4-7-medium",
-					"medium": "claude-opus-4-7-high",
-					"high": "claude-opus-4-7-xhigh",
-					"xhigh": "claude-opus-4-7-max"
+					"low": "claude-opus-4-7-low",
+					"medium": "claude-opus-4-7-medium",
+					"high": "claude-opus-4-7-high",
+					"xhigh": "claude-opus-4-7-xhigh",
+					"max": "claude-opus-4-7-max"
 				}
 			},
 			"requestModelId": "claude-opus-4-7-low",
@@ -14759,19 +14692,19 @@
 			"thinking": {
 				"mode": "effort",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
 				"requiresEffort": true,
 				"effortRouting": {
-					"minimal": "claude-opus-4-7-low-fast",
-					"low": "claude-opus-4-7-medium-fast",
-					"medium": "claude-opus-4-7-high-fast",
-					"high": "claude-opus-4-7-xhigh-fast",
-					"xhigh": "claude-opus-4-7-max-fast"
+					"low": "claude-opus-4-7-low-fast",
+					"medium": "claude-opus-4-7-medium-fast",
+					"high": "claude-opus-4-7-high-fast",
+					"xhigh": "claude-opus-4-7-xhigh-fast",
+					"max": "claude-opus-4-7-max-fast"
 				}
 			},
 			"requestModelId": "claude-opus-4-7-low-fast",
@@ -14802,19 +14735,19 @@
 			"thinking": {
 				"mode": "effort",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
 				"requiresEffort": true,
 				"effortRouting": {
-					"minimal": "claude-opus-4-8-low",
-					"low": "claude-opus-4-8-medium",
-					"medium": "claude-opus-4-8-high",
-					"high": "claude-opus-4-8-xhigh",
-					"xhigh": "claude-opus-4-8-max"
+					"low": "claude-opus-4-8-low",
+					"medium": "claude-opus-4-8-medium",
+					"high": "claude-opus-4-8-high",
+					"xhigh": "claude-opus-4-8-xhigh",
+					"max": "claude-opus-4-8-max"
 				}
 			},
 			"requestModelId": "claude-opus-4-8-low",
@@ -14845,19 +14778,19 @@
 			"thinking": {
 				"mode": "effort",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
 				"requiresEffort": true,
 				"effortRouting": {
-					"minimal": "claude-opus-4-8-low-fast",
-					"low": "claude-opus-4-8-medium-fast",
-					"medium": "claude-opus-4-8-high-fast",
-					"high": "claude-opus-4-8-xhigh-fast",
-					"xhigh": "claude-opus-4-8-max-fast"
+					"low": "claude-opus-4-8-low-fast",
+					"medium": "claude-opus-4-8-medium-fast",
+					"high": "claude-opus-4-8-high-fast",
+					"xhigh": "claude-opus-4-8-xhigh-fast",
+					"max": "claude-opus-4-8-max-fast"
 				}
 			},
 			"requestModelId": "claude-opus-4-8-low-fast",
@@ -16484,19 +16417,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -16596,16 +16522,11 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
-				],
-				"effortMap": {
-					"minimal": "low",
-					"xhigh": "max"
-				}
+					"max"
+				]
 			}
 		},
 		"claude-opus-4.7": {
@@ -16634,19 +16555,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -16676,19 +16590,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -16786,14 +16693,10 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high"
-				],
-				"effortMap": {
-					"minimal": "low"
-				}
+				]
 			}
 		},
 		"gemini-2.5-pro": {
@@ -19738,16 +19641,11 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
-				],
-				"effortMap": {
-					"minimal": "low",
-					"xhigh": "max"
-				}
+					"max"
+				]
 			}
 		},
 		"claude-opus-4-7@default": {
@@ -19772,19 +19670,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -19810,19 +19701,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -19878,14 +19762,10 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high"
-				],
-				"effortMap": {
-					"minimal": "low"
-				}
+				]
 			}
 		},
 		"deepseek-ai/deepseek-v3.1-maas": {
@@ -59108,19 +58988,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -59236,16 +59109,11 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
-				],
-				"effortMap": {
-					"minimal": "low",
-					"xhigh": "max"
-				}
+					"max"
+				]
 			}
 		},
 		"claude-opus-4-7": {
@@ -59270,19 +59138,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -59308,19 +59169,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -59406,14 +59260,10 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high"
-				],
-				"effortMap": {
-					"minimal": "low"
-				}
+				]
 			}
 		},
 		"deepseek-v4-flash": {
@@ -75065,19 +74915,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -75223,16 +75066,11 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
-				],
-				"effortMap": {
-					"minimal": "low",
-					"xhigh": "max"
-				}
+					"max"
+				]
 			}
 		},
 		"anthropic/claude-opus-4.7": {
@@ -75257,19 +75095,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -75295,19 +75126,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -75393,14 +75217,10 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high"
-				],
-				"effortMap": {
-					"minimal": "low"
-				}
+				]
 			}
 		},
 		"arcee-ai/trinity-large-preview": {
@@ -81734,19 +81554,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -81882,16 +81695,11 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
-				],
-				"effortMap": {
-					"minimal": "low",
-					"xhigh": "max"
-				}
+					"max"
+				]
 			}
 		},
 		"anthropic/claude-opus-4.7": {
@@ -81916,19 +81724,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -81954,19 +81755,12 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high",
-					"xhigh"
+					"xhigh",
+					"max"
 				],
-				"effortMap": {
-					"minimal": "low",
-					"low": "medium",
-					"medium": "high",
-					"high": "xhigh",
-					"xhigh": "max"
-				},
 				"supportsDisplay": true
 			}
 		},
@@ -82052,14 +81846,10 @@
 			"thinking": {
 				"mode": "anthropic-adaptive",
 				"efforts": [
-					"minimal",
 					"low",
 					"medium",
 					"high"
-				],
-				"effortMap": {
-					"minimal": "low"
-				}
+				]
 			}
 		},
 		"baidu/ernie-5.0-thinking-preview": {

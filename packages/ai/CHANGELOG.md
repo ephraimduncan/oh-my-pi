@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- Added the `max` reasoning effort to the per-provider thinking-budget tables (Anthropic/Google/Bedrock) for type-completeness; adaptive Claude ignore these budgets. OpenAI-family endpoints expose no `max` tier and fold a `max` request down to their top `xhigh` tier.
+
 ## [16.1.16] - 2026-06-23
 
 ### Fixed

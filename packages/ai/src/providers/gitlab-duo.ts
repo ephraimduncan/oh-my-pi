@@ -1,4 +1,5 @@
 import { buildModel } from "@oh-my-pi/pi-catalog/build";
+import { Effort } from "@oh-my-pi/pi-catalog/effort";
 import { ANTHROPIC_THINKING, mapAnthropicToolChoice } from "../stream";
 import type { Api, Context, FetchImpl, Model, ModelSpec, SimpleStreamOptions } from "../types";
 import { AssistantMessageEventStream } from "../utils/event-stream";
@@ -254,6 +255,8 @@ export function streamGitLabDuo(
 			};
 
 			const reasoningEffort = options.reasoning;
+			// OpenAI proxy branches expose no "max" tier (Anthropic-only); fold it into "xhigh".
+			const openaiReasoning = reasoningEffort === Effort.Max ? Effort.XHigh : reasoningEffort;
 
 			const inner =
 				mapping.provider === "anthropic"
@@ -325,7 +328,7 @@ export function streamGitLabDuo(
 									onResponse: options.onResponse,
 									onSseEvent: options.onSseEvent,
 									fetch: options.fetch,
-									reasoning: reasoningEffort,
+									reasoning: openaiReasoning,
 									toolChoice: options.toolChoice,
 								} satisfies OpenAIResponsesOptions,
 							)
@@ -358,7 +361,7 @@ export function streamGitLabDuo(
 									onResponse: options.onResponse,
 									onSseEvent: options.onSseEvent,
 									fetch: options.fetch,
-									reasoning: reasoningEffort,
+									reasoning: openaiReasoning,
 									toolChoice: options.toolChoice,
 								} satisfies OpenAICompletionsOptions,
 							);

@@ -130,7 +130,7 @@ describe("createAgentSession deferred model pattern resolution", () => {
 
 		expect(session.model?.provider).toBe("runtime-provider");
 		expect(session.model?.id).toBe("runtime-reasoning-model");
-		expect(session.thinkingLevel).toBe(Effort.XHigh);
+		expect(session.thinkingLevel).toBe(Effort.Max);
 	});
 
 	test("selects the settings default model without synchronously validating auth", async () => {
@@ -395,6 +395,7 @@ describe("createAgentSession deferred model pattern resolution", () => {
 		try {
 			expect(session.model?.provider).toBe("runtime-provider");
 			expect(session.model?.id).toBe("runtime-reasoning-model");
+			// Role-model resolution clamps the persisted :max selector to the model's top tier (xhigh).
 			expect(session.thinkingLevel).toBe(Effort.XHigh);
 		} finally {
 			await session.dispose();

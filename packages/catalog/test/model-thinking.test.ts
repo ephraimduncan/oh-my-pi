@@ -400,27 +400,41 @@ describe("model thinking derivation", () => {
 			},
 		});
 		expect(mapEffortToAnthropicAdaptiveEffort(minimaxM3, Effort.High)).toBe("adaptive");
-		// Opus 4.6 has no real xhigh level — the baked 4-tier map aliases XHigh to "max".
-		expect(opus46.thinking?.effortMap).toEqual({ minimal: "low", xhigh: "max" });
-		expect(mapEffortToAnthropicAdaptiveEffort(opus46, Effort.XHigh)).toBe("max");
-		// Opus 4.7+ on the Messages API exposes the full five-tier scale: the baked
-		// map shifts each user-facing effort up one notch so the top tier reaches "max".
-		expect(opus47.thinking?.effortMap).toEqual({
-			minimal: "low",
-			low: "medium",
-			medium: "high",
-			high: "xhigh",
-			xhigh: "max",
-		});
-		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.Minimal)).toBe("low");
-		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.High)).toBe("xhigh");
-		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.XHigh)).toBe("max");
-		expect(mapEffortToAnthropicAdaptiveEffort(mythos, Effort.High)).toBe("xhigh");
-		expect(mapEffortToAnthropicAdaptiveEffort(mythosBedrock, Effort.XHigh)).toBe("max");
+		// Opus 4.6 on the Messages API: 1:1 scale (low/medium/high/max), no shift map.
+		expect(opus46.thinking?.efforts).toEqual([Effort.Low, Effort.Medium, Effort.High, Effort.Max]);
+		expect(opus46.thinking?.effortMap).toBeUndefined();
+		expect(mapEffortToAnthropicAdaptiveEffort(opus46, Effort.Max)).toBe("max");
+		expect(() => mapEffortToAnthropicAdaptiveEffort(opus46, Effort.XHigh)).toThrow(/not supported/);
+		expect(() => mapEffortToAnthropicAdaptiveEffort(opus46, Effort.Minimal)).toThrow(/not supported/);
+		// Opus 4.7+ and Fable/Mythos on the Messages API expose Claude Code's scale 1:1
+		// (low/medium/high/xhigh/max); efforts ARE the wire vocabulary, so no shift map.
+		expect(opus47.thinking?.efforts).toEqual([Effort.Low, Effort.Medium, Effort.High, Effort.XHigh, Effort.Max]);
+		expect(opus47.thinking?.effortMap).toBeUndefined();
+		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.High)).toBe("high");
+		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.XHigh)).toBe("xhigh");
+		expect(mapEffortToAnthropicAdaptiveEffort(opus47, Effort.Max)).toBe("max");
+		expect(() => mapEffortToAnthropicAdaptiveEffort(opus47, Effort.Minimal)).toThrow(/not supported/);
+		expect(mapEffortToAnthropicAdaptiveEffort(mythos, Effort.High)).toBe("high");
+		expect(mapEffortToAnthropicAdaptiveEffort(mythos, Effort.Max)).toBe("max");
+		expect(sonnet46.thinking?.efforts).toEqual([Effort.Low, Effort.Medium, Effort.High]);
 		// Bedrock Converse keeps the four-tier legacy mapping; xhigh aliases to "max".
+		expect(mythosBedrock.thinking?.effortMap).toEqual({ minimal: "low", xhigh: "max" });
+		expect(mapEffortToAnthropicAdaptiveEffort(mythosBedrock, Effort.XHigh)).toBe("max");
 		expect(opus47Bedrock.thinking?.effortMap).toEqual({ minimal: "low", xhigh: "max" });
 		expect(mapEffortToAnthropicAdaptiveEffort(opus47Bedrock, Effort.High)).toBe("high");
 		expect(() => mapEffortToAnthropicAdaptiveEffort(sonnet46, Effort.XHigh)).toThrow(/not supported/);
+	});
+
+	it("clamps a max request down to the top tier on models without a max tier, keeps it on Claude", () => {
+		const gpt5 = createModel({ id: "gpt-5.2", api: "openai-responses", provider: "openai" });
+		const gptEfforts = getSupportedEfforts(gpt5);
+		expect(gptEfforts).not.toContain(Effort.Max);
+		const clamped = clampThinkingLevelForModel(gpt5, Effort.Max);
+		expect(clamped).toBe(gptEfforts[gptEfforts.length - 1]);
+		expect(clamped).not.toBe(Effort.Max);
+
+		const opus47 = createModel({ id: "claude-opus-4-7", api: "anthropic-messages", provider: "anthropic" });
+		expect(clampThinkingLevelForModel(opus47, Effort.Max)).toBe(Effort.Max);
 	});
 
 	it("bakes adaptive display support for Opus 4.7+ and Fable/Mythos 5", () => {
@@ -460,7 +474,6 @@ describe("model thinking derivation", () => {
 		expect(filled.thinking).toEqual({
 			mode: "anthropic-adaptive",
 			efforts: [Effort.Low, Effort.High],
-			effortMap: { low: "medium", high: "xhigh" },
 			supportsDisplay: true,
 		});
 

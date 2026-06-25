@@ -128,14 +128,14 @@ describe("AgentSession role model thinking behavior", () => {
 		expect(toSlow?.thinkingLevel).toBe(Effort.High);
 		expect(session.thinkingLevel).toBe(Effort.High);
 
-		session.setThinkingLevel(Effort.Minimal);
-		expect(session.thinkingLevel).toBe(Effort.Minimal);
+		session.setThinkingLevel(Effort.Medium);
+		expect(session.thinkingLevel).toBe(Effort.Medium);
 
 		const toDefault = await session.cycleRoleModels(["default", "slow"]);
 		expect(toDefault?.role).toBe("default");
 		expect(toDefault?.model.id).toBe(defaultModel.id);
-		expect(toDefault?.thinkingLevel).toBe(Effort.Minimal);
-		expect(session.thinkingLevel).toBe(Effort.Minimal);
+		expect(toDefault?.thinkingLevel).toBe(Effort.Medium);
+		expect(session.thinkingLevel).toBe(Effort.Medium);
 	});
 
 	it("applies slow role thinking even when plan shares the same model", async () => {

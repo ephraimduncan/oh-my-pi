@@ -20,7 +20,7 @@ function createSseResponse(events: unknown[]): Response {
 
 interface CaptureOptions {
 	disableReasoning?: boolean;
-	reasoning?: Effort;
+	reasoning?: Exclude<Effort, Effort.Max>;
 }
 
 async function capturePayload(

@@ -1650,6 +1650,8 @@ export class Theme {
 				return (str: string) => this.fg("thinkingHigh", str);
 			case "xhigh":
 				return (str: string) => this.fg("thinkingXhigh", str);
+			case "max":
+				return (str: string) => this.fg("thinkingXhigh", str);
 			default:
 				return (str: string) => this.fg("thinkingOff", str);
 		}
@@ -1834,6 +1836,7 @@ export class Theme {
 			medium: this.#symbols["thinking.medium"],
 			high: this.#symbols["thinking.high"],
 			xhigh: this.#symbols["thinking.xhigh"],
+			max: this.#symbols["thinking.xhigh"],
 			autoPending: this.#symbols["thinking.autoPending"],
 		};
 	}
