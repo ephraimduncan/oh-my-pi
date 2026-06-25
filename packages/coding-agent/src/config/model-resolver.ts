@@ -84,7 +84,7 @@ const MAX_THINKING_SUFFIX_OPTIONS: ThinkingSuffixOptions = { allowMaxAlias: true
 function parseThinkingSuffix(value: string, options?: ThinkingSuffixOptions): ThinkingLevel | undefined {
 	const level = parseThinkingLevel(value);
 	if (level !== undefined) return level;
-	return options?.allowMaxAlias === true && value === "max" ? ThinkingLevel.XHigh : undefined;
+	return options?.allowMaxAlias === true && value === "max" ? ThinkingLevel.Max : undefined;
 }
 
 /**

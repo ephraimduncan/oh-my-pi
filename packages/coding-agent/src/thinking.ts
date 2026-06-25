@@ -33,7 +33,12 @@ const THINKING_LEVEL_METADATA: Record<ThinkingLevel, ThinkingLevelMetadata> = {
 	[ThinkingLevel.XHigh]: {
 		value: ThinkingLevel.XHigh,
 		label: "xhigh",
-		description: "Maximum reasoning (~32k tokens)",
+		description: "Very deep reasoning (~32k tokens)",
+	},
+	[ThinkingLevel.Max]: {
+		value: ThinkingLevel.Max,
+		label: "max",
+		description: "Deepest reasoning, no budget cap",
 	},
 };
 
@@ -43,7 +48,7 @@ const EFFORT_BY_SELECTOR: Readonly<Record<string, Effort>> = {
 	[Effort.Medium]: Effort.Medium,
 	[Effort.High]: Effort.High,
 	[Effort.XHigh]: Effort.XHigh,
-	max: Effort.XHigh,
+	[Effort.Max]: Effort.Max,
 };
 const THINKING_LEVEL_BY_SELECTOR: Readonly<Record<string, ThinkingLevel>> = {
 	[ThinkingLevel.Inherit]: ThinkingLevel.Inherit,
@@ -144,7 +149,7 @@ const AUTO_THINKING_METADATA: ConfiguredThinkingLevelMetadata = {
  */
 export function parseConfiguredThinkingLevel(value: string | null | undefined): ConfiguredThinkingLevel | undefined {
 	if (value === AUTO_THINKING) return AUTO_THINKING;
-	if (value === "max") return ThinkingLevel.XHigh;
+	if (value === "max") return ThinkingLevel.Max;
 	return parseThinkingLevel(value);
 }
 

@@ -1,4 +1,4 @@
-import type { Effort } from "@oh-my-pi/pi-catalog/effort";
+import { Effort } from "@oh-my-pi/pi-catalog/effort";
 import { requireSupportedEffort } from "@oh-my-pi/pi-catalog/model-thinking";
 import type { Api, Model } from "../../types";
 
@@ -80,10 +80,15 @@ export function shouldUseCodexResponsesLite(body: RequestBody, requested: boolea
 }
 
 function getReasoningConfig(model: Model<Api>, options: CodexRequestOptions): ReasoningConfig {
-	const config: ReasoningConfig = {
-		effort:
-			options.reasoningEffort === "none" ? "none" : requireSupportedEffort(model, options.reasoningEffort as Effort),
-	};
+	let effort: ReasoningConfig["effort"];
+	if (options.reasoningEffort === "none") {
+		effort = "none";
+	} else {
+		// OpenAI Codex exposes no "max" tier (Anthropic-only); fold it into the top "xhigh".
+		const supported = requireSupportedEffort(model, options.reasoningEffort as Effort);
+		effort = supported === Effort.Max ? Effort.XHigh : supported;
+	}
+	const config: ReasoningConfig = { effort };
 	if (options.reasoningSummary !== null) {
 		config.summary = options.reasoningSummary ?? "detailed";
 	}

@@ -9,6 +9,8 @@
  */
 
 import { buildModel } from "@oh-my-pi/pi-catalog/build";
+import { Effort } from "@oh-my-pi/pi-catalog/effort";
+import { clampThinkingLevelForModel } from "@oh-my-pi/pi-catalog/model-thinking";
 import { ANTHROPIC_THINKING, mapAnthropicToolChoice } from "../stream";
 import type { Context, Model, ModelSpec, SimpleStreamOptions } from "../types";
 import { AssistantMessageEventStream } from "../utils/event-stream";
@@ -112,7 +114,11 @@ export function streamOpenAIAnthropicShim(
 						} as ModelSpec<"openai-completions">)
 					: model;
 
-				const reasoningEffort = options?.reasoning;
+				// The OpenAI-format branch has no "max" tier (Anthropic-only). Clamp
+				// the request to the model's top supported effort rather than blindly
+				// folding to "xhigh", which would exceed models that stop at "high".
+				const clamped = clampThinkingLevelForModel(openaiModel, options?.reasoning);
+				const reasoningEffort = clamped === Effort.Max ? Effort.XHigh : clamped;
 				const innerStream = streamOpenAICompletions(openaiModel, context, {
 					apiKey,
 					temperature: options?.temperature,

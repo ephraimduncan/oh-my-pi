@@ -243,7 +243,7 @@ Test the contract the system exposes — not the easiest internal detail to asse
 
 ## Changelog
 
-Location: `packages/*/CHANGELOG.md` (per package).
+**Fork changes → root `CHANGELOG.fork.md`.** This fork's own features/fixes are logged in the root `CHANGELOG.fork.md` (entries grouped by package under `## [Unreleased]`). NEVER add fork-specific entries to the upstream per-package `packages/*/CHANGELOG.md` files: those are owned by upstream, and editing their `[Unreleased]` section conflicts on nearly every `upstream/main` sync. Keep `packages/*/CHANGELOG.md` byte-identical to upstream — only touch one when authoring an entry that is genuinely an upstream contribution.
 
 **Format** — sections under `## [Unreleased]`:
 - `### Breaking Changes` (first if present)
@@ -253,6 +253,7 @@ Location: `packages/*/CHANGELOG.md` (per package).
 - `### Removed`
 
 **Rules:**
+- Fork-specific entries go in the root `CHANGELOG.fork.md`, never in `packages/*/CHANGELOG.md`.
 - New entries always go under `## [Unreleased]`.
 - Never modify already-released sections (e.g., `## [0.12.2]`) — they are immutable.
 - Don't flag changelog section order or formatting in reviews or PRs — `bun run release` runs `fix-changelogs` which normalizes everything automatically.

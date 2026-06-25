@@ -46,6 +46,26 @@ describe("parseAgentFields", () => {
 		expect(fields?.thinkingLevel).toBe(Effort.Medium);
 	});
 
+	test("parses max thinking key", () => {
+		const fields = parseAgentFields({
+			name: "reviewer",
+			description: "desc",
+			thinking: "max",
+		});
+
+		expect(fields?.thinkingLevel).toBe(Effort.Max);
+	});
+
+	test("ignores auto as a frontmatter thinking selector", () => {
+		const fields = parseAgentFields({
+			name: "reviewer",
+			description: "desc",
+			thinking: "auto",
+		});
+
+		expect(fields?.thinkingLevel).toBeUndefined();
+	});
+
 	test("prefers thinking-level over legacy thinking", () => {
 		const fields = parseAgentFields({
 			name: "reviewer",

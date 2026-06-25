@@ -70,7 +70,7 @@ describe("auto thinking classifier helpers", () => {
 	it("parses CLI --thinking selectors while rejecting inherit", () => {
 		expect(parseCliThinkingLevel(ThinkingLevel.Off)).toBe(ThinkingLevel.Off);
 		expect(parseCliThinkingLevel(AUTO_THINKING)).toBe(AUTO_THINKING);
-		expect(parseCliThinkingLevel("max")).toBe(ThinkingLevel.XHigh);
+		expect(parseCliThinkingLevel("max")).toBe(ThinkingLevel.Max);
 		expect(parseCliThinkingLevel(ThinkingLevel.Inherit)).toBeUndefined();
 		expect(parseCliThinkingLevel("bogus")).toBeUndefined();
 	});
@@ -166,9 +166,9 @@ describe("auto thinking classifier helpers", () => {
 	});
 
 	it("accepts max as the top configured thinking alias", () => {
-		expect(parseEffort("max")).toBe(Effort.XHigh);
+		expect(parseEffort("max")).toBe(Effort.Max);
 		expect(parseThinkingLevel("max")).toBeUndefined();
-		expect(parseConfiguredThinkingLevel("max")).toBe(ThinkingLevel.XHigh);
+		expect(parseConfiguredThinkingLevel("max")).toBe(ThinkingLevel.Max);
 	});
 
 	it("rejects inherited object keys as thinking selectors", () => {
