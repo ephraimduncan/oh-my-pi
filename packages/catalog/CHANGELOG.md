@@ -2,13 +2,6 @@
 
 ## [Unreleased]
 
-### Added
-
-- Added a sixth canonical thinking effort, `Effort.Max`, ranking above `xhigh` — Anthropic's deepest reasoning tier.
-
-### Changed
-
-- Changed first-party Anthropic Messages Claude (Opus 4.6+, Fable/Mythos 5) and the Devin Opus effort-tier variants to expose Anthropic's literal effort scale 1:1 (matching Claude Code), removing the previous up-one-notch shift. Opus 4.7+/Fable/Mythos now expose `low/medium/high/xhigh/max`, Opus 4.6 `low/medium/high/max`, and Sonnet/Haiku 4.6 `low/medium/high`; `minimal` is dropped from these models. Non-Claude models, Bedrock Claude, and OpenRouter-Anthropic are unchanged.
 ## [16.1.17] - 2026-06-24
 
 ### Fixed

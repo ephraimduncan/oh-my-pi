@@ -22,10 +22,7 @@ function chatSse(): Response {
 	});
 }
 
-async function captureOpenAiWireEffort(
-	model: Model<"openai-completions">,
-	reasoning: Effort,
-): Promise<unknown> {
+async function captureOpenAiWireEffort(model: Model<"openai-completions">, reasoning: Effort): Promise<unknown> {
 	let body: Record<string, unknown> | undefined;
 	const fetchMock: FetchImpl = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
 		body = JSON.parse(typeof init?.body === "string" ? init.body : "{}") as Record<string, unknown>;

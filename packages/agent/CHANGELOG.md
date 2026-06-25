@@ -2,9 +2,6 @@
 
 ## [Unreleased]
 
-### Added
-
-- Added `ThinkingLevel.Max`, the agent-local selector for Anthropic's `max` reasoning effort.
 ## [16.1.18] - 2026-06-25
 
 ### Fixed
