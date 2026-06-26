@@ -12,11 +12,14 @@ concurrency:
 
 permissions:
   contents: write
-  issues: write
 
 jobs:
   sync:
     runs-on: ubuntu-latest
+    outputs:
+      status: ${{ steps.merge.outputs.status }}
+      version: ${{ steps.merge.outputs.version }}
+      tag: ${{ steps.tag.outputs.tag }}
     steps:
       - name: Checkout fork main
         uses: actions/checkout@v4
@@ -32,6 +35,7 @@ jobs:
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config merge.ours.driver true
           git remote add upstream https://github.com/can1357/oh-my-pi.git
           git remote set-url --push upstream DISABLED
           git fetch --tags upstream main:refs/remotes/upstream/main
@@ -55,73 +59,44 @@ jobs:
 
           echo "status=merged" >> "$GITHUB_OUTPUT"
           echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "version=$(jq -r .version packages/coding-agent/package.json)" >> "$GITHUB_OUTPUT"
 
       - name: Push synced main
         if: steps.merge.outputs.status == 'merged'
         run: git push origin HEAD:main
 
-      - name: Close resolved conflict issue
-        if: steps.merge.outputs.status == 'merged' || steps.merge.outputs.status == 'up-to-date'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
+      - name: Create and push release tag
+        if: steps.merge.outputs.status == 'merged'
+        id: tag
         run: |
-          set -u
-
-          existing_issue=$(gh issue list \
-            --state open \
-            --search "Resolve upstream sync conflict in:title" \
-            --json number \
-            --jq '.[0].number // empty')
-
-          if [ -n "$existing_issue" ]; then
-            gh issue close "$existing_issue" \
-              --comment "The latest upstream sync completed successfully. Closing this conflict tracker."
-          fi
+          set -euo pipefail
+          tag="v${{ steps.merge.outputs.version }}-sync.${{ github.run_number }}"
+          git tag -f "$tag" HEAD
+          git push -f origin "$tag"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
       - name: Report merge conflict
         if: steps.merge.outputs.status == 'conflict'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GH_REPO: ${{ github.repository }}
-          CONFLICTS: ${{ steps.merge.outputs.conflicts }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          set -u
-
-          title="Resolve upstream sync conflict"
-          body_file=$(mktemp)
-          cat > "$body_file" <<EOF
-          The scheduled upstream sync could not merge \`can1357/oh-my-pi:main\` into this fork's \`main\`.
-
-          Conflicting files:
-          \`\`\`
-          ${CONFLICTS:-unknown}
-          \`\`\`
-
-          Run: $RUN_URL
-
-          Resolve locally:
-          1. \`git fetch upstream main\`
-          2. \`git checkout main\`
-          3. \`git merge upstream/main\`
-          4. Resolve conflicts by preserving local user features and upstream fixes.
-          5. Run the relevant checks.
-          6. Push \`main\`.
-          EOF
-
-          existing_issue=$(gh issue list \
-            --state open \
-            --search "$title in:title" \
-            --json number \
-            --jq '.[0].number // empty')
-
-          if [ -n "$existing_issue" ]; then
-            gh issue comment "$existing_issue" --body-file "$body_file"
-          else
-            gh issue create --title "$title" --body-file "$body_file"
-          fi
-
+          {
+            echo "## Upstream sync conflict"
+            echo
+            echo "Could not merge \`can1357/oh-my-pi:main\` into this fork's \`main\`."
+            echo
+            echo "### Conflicting files"
+            echo '```'
+            echo "${{ steps.merge.outputs.conflicts }}"
+            echo '```'
+            echo
+            echo "Resolve locally: \`git fetch upstream main && git merge upstream/main\`, resolve, run \`bun check\`, push \`main\`."
+          } >> "$GITHUB_STEP_SUMMARY"
           exit 1
+
+  release:
+    needs: sync
+    if: needs.sync.outputs.status == 'merged'
+    permissions:
+      contents: write
+    uses: ./.github/workflows/fork-release.yml
+    with:
+      tag: ${{ needs.sync.outputs.tag }}

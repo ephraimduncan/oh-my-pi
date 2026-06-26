@@ -1,0 +1,42 @@
+# Fork-only: publish a GitHub Release on every push to main (PR merges, direct
+# pushes), reusing fork-release.yml. Tag-only — never bumps versions or commits,
+# so it can't conflict with upstream merges. Skips the version-bump commits that
+# `bun run release` makes (those already publish via fork-release.yml's tag push).
+name: Fork Auto Release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: fork-auto-release
+  cancel-in-progress: true
+
+jobs:
+  tag:
+    if: "${{ !startsWith(github.event.head_commit.message, 'chore: bump version to') }}"
+    runs-on: ubuntu-22.04
+    outputs:
+      tag: ${{ steps.compute.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: compute
+        run: |
+          set -euo pipefail
+          version=$(jq -r .version packages/coding-agent/package.json)
+          echo "tag=v${version}-fork.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+      - name: Create and push release tag at this commit
+        run: |
+          set -euo pipefail
+          git tag -f "${{ steps.compute.outputs.tag }}" "${{ github.sha }}"
+          git push -f origin "${{ steps.compute.outputs.tag }}"
+  release:
+    needs: tag
+    permissions:
+      contents: write
+    uses: ./.github/workflows/fork-release.yml
+    with:
+      tag: ${{ needs.tag.outputs.tag }}
