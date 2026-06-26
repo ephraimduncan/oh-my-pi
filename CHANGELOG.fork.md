@@ -24,6 +24,8 @@ convention.
 
 - Added a fork-only `Fork CI` workflow (`.github/workflows/fork-ci.yml`): lint + type check + collab-web build, and the full TS test suite against a locally-built native addon, on GitHub-hosted `ubuntu-22.04` runners, for PRs and pushes to `main`.
 - Disabled upstream's `CI`, `Vouch (PR gate)`, and `Vouch (manage)` workflows on this fork via repo Actions settings (`gh workflow disable`) instead of editing the upstream-owned files, so daily `upstream/main` syncs never conflict. Upstream `CI` only ever queued-then-cancelled here (its jobs target the `omp-kata` self-hosted runner this fork lacks) and its release jobs need upstream npm/Homebrew/Apple secrets; the vouch gate auto-closed PRs and labeled for the `robomp` bot, neither of which applies to this personal fork.
+- Added automatic fork releases: `.github/workflows/fork-auto-release.yml` publishes a GitHub Release on every push to `main` (PR merges, direct pushes), and `sync-upstream.yml` publishes one after each successful upstream sync. Both reuse `fork-release.yml` via `workflow_call`; releases are tag-only and never bump `package.json`, and the manual `bun run release` path is de-duplicated via a `chore: bump version to` commit-subject guard.
+- Fixed the daily upstream sync, which had been failing on every run (the fork had fallen 156 commits behind upstream): `AGENTS.md` is now `merge=ours` in `.gitattributes` so its intentional fork divergence no longer blocks the auto-merge, and merge-conflict reporting writes to the workflow run's job summary instead of `gh issue create` (issues are disabled on this fork, so the old path made every conflicting run exit non-zero).
 
 ### coding-agent
 

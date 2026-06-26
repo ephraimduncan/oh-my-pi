@@ -3,6 +3,10 @@
 # Default: normalize text files, but do not force binary files as text.
 * text=auto eol=lf
 
+# Fork: AGENTS.md is intentionally fork-specific (Fork Maintenance + changelog
+# policy). Keep our version on every upstream merge; reconcile by hand if needed.
+AGENTS.md merge=ours
+
 # Common binary assets and archives must never be line-ending normalized.
 *.png -text
 *.jpg -text
